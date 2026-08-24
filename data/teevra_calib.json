@@ -1,0 +1,10 @@
+{
+  "near_stump_height_px": 351.0,
+  "far_stump_height_px": 45.0,
+  "measured_frame": 0,
+  "frame_size": [
+    1920,
+    1080
+  ],
+  "note": "Same nets facility/camera placement as delivery_4/7/19/21 but a different recording session (75fps vs 50/60fps) -- measured independently rather than reusing their exact pixel values. near_stump_height_px is approximate: the stump-to-base collar transition is partly obscured by teevra.mov's baked-in video-player seek bar (see teevra_roi.json), so this carries more uncertainty than the other 4 videos' calibration."
+}

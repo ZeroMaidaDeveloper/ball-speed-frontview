@@ -63,7 +63,6 @@ from roi_utils import load_roi_mask
 
 _MEDIAN_KSIZE = 3
 _MORPH_KERNEL = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-_WARMUP_FRAMES = 40
 _COCO_PERSON_CLASS = 0
 
 
@@ -189,7 +188,7 @@ class LabScaleFrameDetector:
         fg = self.mog2.apply(enhanced_l)
         if self.activity is None:
             self.activity = np.zeros(fg.shape, dtype=np.float32)
-        if self.frame_idx < _WARMUP_FRAMES:
+        if self.frame_idx < cfg_det["warmup_frames"]:
             self.activity = self.activity * cfg_det["activity_decay"] + (fg > 0).astype(np.float32)
             return []
 

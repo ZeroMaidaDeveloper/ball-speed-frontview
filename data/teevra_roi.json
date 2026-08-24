@@ -1,0 +1,25 @@
+{
+  "polygon": [
+    [
+      0,
+      0
+    ],
+    [
+      1920,
+      0
+    ],
+    [
+      1920,
+      950
+    ],
+    [
+      0,
+      950
+    ]
+  ],
+  "frame_size": [
+    1920,
+    1080
+  ],
+  "note": "teevra.mov is a screen recording of a web video player (clideo.com) with player chrome (seek bar, timestamp, control icons) baked into the bottom ~130px of every frame -- this ROI excludes that strip so the moving seek-bar playhead cannot be mistaken for a fast-moving object."
+}

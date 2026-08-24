@@ -21,6 +21,9 @@ All modules must conform to these shapes so pieces built independently
       "end_t": 4.83,
       "speed_kmh": 118.4,
       "speed_confidence": "high",
+      "speed_method": "calibrated_size",
+      "speed_fit_r2": 0.52,
+      "speed_fit_frames_used": 34,
       "quality_flags": ["occlusion_gap"],
       "frames": [
         {
@@ -70,6 +73,21 @@ Notes:
 - `speed_confidence` is `"high" | "medium" | "low"` — driven by presence
   of `quality_flags` and whether `speed_kmh` falls inside
   `config.yaml: speed.min_plausible_kmh/max_plausible_kmh`.
+- `speed_method` is `"calibrated_size"` (preferred -- fits the ball's
+  real-world distance-from-camera, derived every frame from its own
+  apparent diameter via a per-video calibrated focal length, over time;
+  see `pipeline/calibration.py` and `pipeline/speed.py`:
+  `_trim_and_fit_distance`) or `"flight_distance_fallback"` (used only
+  when the video has no `<video_stem>_calib.json` sidecar -- divides
+  `config.yaml: geometry.flight_distance_m` by the tracked duration, which
+  is only accurate if the track happens to span the whole release-to-
+  arrival flight; flagged via `quality_flags: "uncalibrated_speed_estimate"`).
+- `speed_fit_r2` / `speed_fit_frames_used` are present only when
+  `speed_method` is `"calibrated_size"` -- the linear fit's R² (see
+  config.yaml: calibration.min_fit_r2 for what counts as a poor fit,
+  flagged `"noisy_size_fit"`) and how many of the track's real frames
+  survived trimming to the physically-consistent monotonic prefix (see
+  `quality_flags: "trimmed_non_monotonic_tail"` below).
 - `quality_flags` is a list of short strings, e.g. `"occlusion_gap"`,
   `"short_track"`, `"speed_out_of_range"`, `"few_frames"`,
   `"low_diam_change"` (apparent size neither grew nor shrank much over the
@@ -79,6 +97,13 @@ Notes:
   tracking.min_diam_growth_ratio/max_diam_shrink_ratio`). Growth OR shrink
   both count as evidence of a real flight -- which one to expect depends
   on camera placement (see that config entry).
+  Speed-fit-specific flags: `"uncalibrated_speed_estimate"` (see
+  `speed_method` above), `"few_calibrated_frames"` (fewer than
+  `config.yaml: calibration.min_frames_for_fit` real frames survived
+  trimming), `"trimmed_non_monotonic_tail"` (part of the track was
+  excluded from the speed fit -- it's still present in `frames` for
+  display, just not trusted for `speed_kmh`), `"noisy_size_fit"` (the fit
+  itself has a low R², see `speed_fit_r2`).
 - `diam_growth_ratio` (float) is attached by `track.py` alongside `frames`
   -- (median diam_px of the track's last third of real frames) / (median
   of its first third); this is what `low_diam_change` is driven by. A
@@ -128,6 +153,13 @@ edits.
   duplicate files with `(1)` suffixes (same content, re-uploaded) —
   de-duplicate by comparing filesize before processing so the same
   session isn't processed twice.
+- `<video_stem>_calib.json` sitting next to a video's REAL (symlink-
+  resolved) path -- same lookup convention as `<video_stem>_roi.json`
+  (`pipeline/roi_utils.py`) -- gives that video's near/far stump pixel
+  heights for `pipeline/calibration.py`'s focal-length derivation, used by
+  `pipeline/speed.py`'s primary speed estimate. See that module's
+  docstring for the shape. Optional: a video without one falls back to
+  `speed_method: "flight_distance_fallback"`.
 - This pipeline handles both a camera near the batting end (ball
   approaches, grows in apparent size) and one near the bowling end (ball
   recedes, shrinks) -- see config.yaml: tracking.min_diam_growth_ratio /

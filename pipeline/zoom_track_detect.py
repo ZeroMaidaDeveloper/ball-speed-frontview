@@ -55,10 +55,71 @@ from typing import Any
 import cv2
 import numpy as np
 
-from lab_scale_detect import LabScaleFrameDetector
+from lab_scale_detect import LabScaleFrameDetector, _inside_any_mask
 
 _COCO_SPORTS_BALL_CLASS = 32
 _MOTION_MORPH_KERNEL = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2, 2))
+
+
+def _size_ok(diam: float, expected_diam: float | None, cfg_zoom: dict[str, Any]) -> bool:
+    """Same size-consistency philosophy as track.py's own tracker gating:
+    a real ball's apparent diameter changes gradually frame to frame, so a
+    candidate whose implied diameter is wildly different from the current
+    track's expected size is more likely a differently-sized confounder
+    (e.g. a strip of the bowler's sleeve) than the ball itself. Skipped
+    (returns True) when there's no expected-size estimate yet."""
+    if expected_diam is None or expected_diam <= 0:
+        return True
+    ratio = diam / expected_diam
+    return cfg_zoom["size_ratio_min"] <= ratio <= cfg_zoom["size_ratio_max"]
+
+
+def _direction_ok(
+    cand_cx: float, cand_cy: float, track_pos: tuple[float, float], track_dir: tuple[float, float] | None,
+    cfg_zoom: dict[str, Any],
+) -> bool:
+    """A real ball's direction of travel changes only gradually frame to
+    frame (see module docstring: delivery_7.mp4's confirmed release
+    trajectory holds a ~13-degree-wide heading for 9 consecutive frames).
+    `_size_ok` alone wasn't enough to stop zoom_track_detect.py from
+    hijacking onto the bowler's own follow-through motion on delivery_7.mp4
+    -- his moving limbs are also roughly ball-sized nearby blobs -- but
+    their direction of motion is nothing like the ball's established
+    heading (observed frame-to-frame implied angle swinging by 80-300
+    degrees once the real ball was lost, vs. ~13 degrees of spread while it
+    was genuinely being tracked). Reject a candidate whose implied step
+    direction from `track_pos` deviates too far (cosine similarity below
+    `min_direction_cos`) from the current heading EMA. Skipped (returns
+    True) when there's no heading estimate yet (the very first
+    confirmation after a track starts)."""
+    if track_dir is None:
+        return True
+    dx, dy = cand_cx - track_pos[0], cand_cy - track_pos[1]
+    norm = math.hypot(dx, dy)
+    if norm < 1e-6:
+        return True  # candidate essentially at the same point -- not informative either way
+    cos_sim = (dx * track_dir[0] + dy * track_dir[1]) / norm
+    return cos_sim >= cfg_zoom["min_direction_cos"]
+
+
+def _normalize(dx: float, dy: float) -> tuple[float, float] | None:
+    norm = math.hypot(dx, dy)
+    if norm < 1e-6:
+        return None
+    return dx / norm, dy / norm
+
+
+def _update_direction_ema(
+    track_dir: tuple[float, float] | None, dx: float, dy: float, cfg_zoom: dict[str, Any]
+) -> tuple[float, float] | None:
+    step_dir = _normalize(dx, dy)
+    if step_dir is None:
+        return track_dir
+    if track_dir is None:
+        return step_dir
+    alpha = cfg_zoom["direction_ema_alpha"]
+    blended = (alpha * step_dir[0] + (1 - alpha) * track_dir[0], alpha * step_dir[1] + (1 - alpha) * track_dir[1])
+    return _normalize(*blended) or track_dir
 
 
 def _motion_rescue(
@@ -67,6 +128,10 @@ def _motion_rescue(
     prev_gray2: np.ndarray,
     pred_cx: float,
     pred_cy: float,
+    expected_diam: float | None,
+    track_pos: tuple[float, float],
+    track_dir: tuple[float, float] | None,
+    person_masks: list[np.ndarray],
     frame_w: int,
     frame_h: int,
     cfg_zoom: dict[str, Any],
@@ -79,8 +144,21 @@ def _motion_rescue(
     both steps -- suppresses single-frame sensor noise while still
     responding to a ball that's desaturated/darkened past
     lab_scale_detect.py's hard color gate (see module docstring). Returns
-    the best {"bbox", "conf"} within `track_gate_px` of the prediction, or
+    the best {"bbox", "conf"} within `track_gate_px` of the prediction,
+    outside all of `person_masks`, and passing both `_size_ok` (vs
+    `expected_diam`) and `_direction_ok` (vs `track_pos`/`track_dir`), or
     None.
+
+    The person-mask exclusion turned out to be the one that actually
+    matters: on delivery_7.mp4, once the real ball was lost, this rescue
+    kept confirming smoothly-moving, plausibly-sized candidates that were
+    visually confirmed to be the bowler's own sleeve/leg/shoe during his
+    follow-through -- his limb motion is itself smooth and roughly ball-
+    sized, so neither `_size_ok` nor `_direction_ok` alone caught it. But
+    every one of those false confirmations sat ON the bowler's own body,
+    which `lab_scale_detect.py` already segments out for its own
+    candidates (see `LabScaleFrameDetector.person_masks`) -- this rescue
+    just wasn't reusing that exclusion before.
     """
     half = cfg_zoom["motion_rescue_half_size_px"]
     x0, y0 = max(0, int(pred_cx) - half), max(0, int(pred_cy) - half)
@@ -105,7 +183,13 @@ def _motion_rescue(
         long_side, short_side = max(w, h), max(1, min(w, h))
         if long_side / short_side > cfg_zoom["motion_rescue_max_aspect_ratio"]:
             continue
+        if not _size_ok((w + h) / 2.0, expected_diam, cfg_zoom):
+            continue
         cx, cy = x0 + x + w / 2.0, y0 + y + h / 2.0
+        if person_masks and _inside_any_mask(int(cx), int(cy), person_masks):
+            continue
+        if not _direction_ok(cx, cy, track_pos, track_dir, cfg_zoom):
+            continue
         dist = math.hypot(cx - pred_cx, cy - pred_cy)
         if dist > cfg_zoom["track_gate_px"]:
             continue
@@ -139,6 +223,8 @@ def detect_candidates(video_path: str, config: dict[str, Any]) -> list[dict[str,
     last_lab_hit: dict[str, float] | None = None  # {"t","cx","cy"}
     track_pos: tuple[float, float] | None = None
     track_vel: tuple[float, float] | None = None
+    track_diam: float | None = None
+    track_dir: tuple[float, float] | None = None
     track_t: float | None = None
     missed_in_track = 0
     # Grayscale history for _motion_rescue's three-frame differencing --
@@ -174,6 +260,8 @@ def detect_candidates(video_path: str, config: dict[str, Any]) -> list[dict[str,
                         tracking = True
                         track_pos = (best["cx"], best["cy"])
                         track_vel = ((best["cx"] - last_lab_hit["cx"]) / dt, (best["cy"] - last_lab_hit["cy"]) / dt)
+                        track_diam = best["diam_px"]
+                        track_dir = _normalize(best["cx"] - last_lab_hit["cx"], best["cy"] - last_lab_hit["cy"])
                         track_t = t
                         missed_in_track = 0
             if best is not None:
@@ -190,7 +278,11 @@ def detect_candidates(video_path: str, config: dict[str, Any]) -> list[dict[str,
             confirmed = None
             confirmed_source = None
             gated = [
-                c for c in lab_cands if math.hypot(c["cx"] - pred_cx, c["cy"] - pred_cy) <= cfg_zoom["track_gate_px"]
+                c
+                for c in lab_cands
+                if math.hypot(c["cx"] - pred_cx, c["cy"] - pred_cy) <= cfg_zoom["track_gate_px"]
+                and _size_ok(c["diam_px"], track_diam, cfg_zoom)
+                and _direction_ok(c["cx"], c["cy"], track_pos, track_dir, cfg_zoom)
             ]
             if gated:
                 best_gated = max(gated, key=lambda c: c["conf"])
@@ -203,7 +295,20 @@ def detect_candidates(video_path: str, config: dict[str, Any]) -> list[dict[str,
             # module docstring for why this recovers many real frames LAB
             # alone loses once the ball desaturates against the netting).
             if confirmed is None and prev_gray is not None and prev_gray2 is not None:
-                rescued = _motion_rescue(gray, prev_gray, prev_gray2, pred_cx, pred_cy, frame_w, frame_h, cfg_zoom)
+                rescued = _motion_rescue(
+                    gray,
+                    prev_gray,
+                    prev_gray2,
+                    pred_cx,
+                    pred_cy,
+                    track_diam,
+                    track_pos,
+                    track_dir,
+                    lab_detector.person_masks,
+                    frame_w,
+                    frame_h,
+                    cfg_zoom,
+                )
                 if rescued is not None:
                     confirmed = rescued
                     confirmed_source = "motion_rescue"
@@ -228,18 +333,35 @@ def detect_candidates(video_path: str, config: dict[str, Any]) -> list[dict[str,
                     if len(boxes) > 0:
                         best_box = max(boxes, key=lambda b: float(b.conf[0]))
                         bx1, by1, bx2, by2 = best_box.xyxy[0].tolist()
-                        confirmed = {
-                            "bbox": [x0 + bx1 / upscale, y0 + by1 / upscale, x0 + bx2 / upscale, y0 + by2 / upscale],
-                            "conf": float(best_box.conf[0]),
-                        }
-                        confirmed_source = "zoom_track"
+                        yolo_cx, yolo_cy = (bx1 + bx2) / 2.0, (by1 + by2) / 2.0
+                        if _direction_ok(yolo_cx, yolo_cy, track_pos, track_dir, cfg_zoom):
+                            confirmed = {
+                                "bbox": [
+                                    x0 + bx1 / upscale,
+                                    y0 + by1 / upscale,
+                                    x0 + bx2 / upscale,
+                                    y0 + by2 / upscale,
+                                ],
+                                "conf": float(best_box.conf[0]),
+                            }
+                            confirmed_source = "zoom_track"
 
             if confirmed is not None:
                 bx1, by1, bx2, by2 = confirmed["bbox"]
                 new_cx, new_cy = (bx1 + bx2) / 2.0, (by1 + by2) / 2.0
+                new_diam = ((bx2 - bx1) + (by2 - by1)) / 2.0
                 if dt > 0:
                     track_vel = ((new_cx - track_pos[0]) / dt, (new_cy - track_pos[1]) / dt)
+                track_dir = _update_direction_ema(track_dir, new_cx - track_pos[0], new_cy - track_pos[1], cfg_zoom)
                 track_pos = (new_cx, new_cy)
+                # EMA rather than a hard overwrite -- smooths per-frame size
+                # noise (the ball is only a handful of pixels across for
+                # much of the track) so `_size_ok`'s expected_diam tracks
+                # the real shrinking trend instead of chasing single-frame
+                # measurement jitter.
+                track_diam = new_diam if track_diam is None else (
+                    cfg_zoom["diam_ema_alpha"] * new_diam + (1 - cfg_zoom["diam_ema_alpha"]) * track_diam
+                )
                 track_t = t
                 missed_in_track = 0
                 candidates.append(
@@ -253,10 +375,25 @@ def detect_candidates(video_path: str, config: dict[str, Any]) -> list[dict[str,
                 )
             else:
                 missed_in_track += 1
+                # Decay the velocity estimate on every unconfirmed frame
+                # rather than holding it fixed -- a receding ball
+                # decelerates in image-space (see SCHEMA.md), so an
+                # unchecked constant-velocity extrapolation across a run of
+                # misses systematically overshoots ahead of the ball's true
+                # position, widening the search window's blind spot right
+                # into wherever the bowler's own follow-through happens to
+                # be. Decaying toward the last confirmed position keeps the
+                # search anchored closer to where the ball actually is.
+                track_vel = (
+                    track_vel[0] * cfg_zoom["missed_velocity_decay"],
+                    track_vel[1] * cfg_zoom["missed_velocity_decay"],
+                )
                 if missed_in_track > cfg_zoom["max_missed_in_track"]:
                     tracking = False
                     track_pos = None
                     track_vel = None
+                    track_diam = None
+                    track_dir = None
                     track_t = None
                     last_lab_hit = None
 

@@ -1,0 +1,10 @@
+{
+  "near_stump_height_px": 372.0,
+  "far_stump_height_px": 44.6,
+  "measured_frame": 3,
+  "frame_size": [
+    1920,
+    1080
+  ],
+  "note": "Near/far stump pixel heights (bare stumps only, excluding the plastic practice-base flare), measured from a representative early frame via yellow-color segmentation + width-profile analysis (see pipeline/calibration.py). far_stump_height_px is derived by applying the near set's measured stump-only/total-height ratio to the far set's total height, since the far set is too small/low-res to reliably separate stump from base directly. Used with config.yaml: calibration.stump_height_m/pitch_length_m to derive a per-video focal length (pinhole model) for speed.py's calibrated speed estimate."
+}

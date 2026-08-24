@@ -1,6 +1,8 @@
 # Cricket ball speed pipeline configuration.
-# The single most important accuracy lever is `flight_distance_m` below —
-# everything else only needs to be roughly right given the +-10 km/h target.
+# The single most important accuracy lever is per-video camera calibration
+# (see `calibration:` below) when a `<video_stem>_calib.json` sidecar
+# exists; `geometry.flight_distance_m` is only a fallback for videos
+# without one -- see pipeline/speed.py and pipeline/calibration.py.
 
 paths:
   videos_dir: "."
@@ -15,13 +17,64 @@ ball:
   diameter_m: 0.0715          # standard men's cricket ball diameter
 
 geometry:
-  # Approximate real-world distance (meters) the ball travels from the
-  # release-detection frame to the arrival-detection frame in THIS nets
-  # setup (camera at the batting end). This is a rough default
-  # (crease-to-crease ~17.68m minus a release offset); override per-venue
-  # if the actual measured distance is known. This constant dominates the
-  # error budget far more than detector/tracker accuracy does.
+  # Fallback ONLY, used when a video has no `<video_stem>_calib.json`
+  # sidecar (see calibration: below and pipeline/calibration.py) -- divides
+  # this fixed assumed flight distance by however much of the flight got
+  # tracked, which is only valid if the track happens to span the WHOLE
+  # release-to-arrival flight. For this project's delivery_*.mp4 nets
+  # footage the tracked segment is usually a partial fragment (the ball
+  # is lost once too small/dark against the netting), so this fallback
+  # is known to be inaccurate there -- that's what the calibrated
+  # per-video estimate below replaces. Kept only for videos without a
+  # calibration file yet.
   flight_distance_m: 17.0
+
+# Per-video camera calibration (see pipeline/calibration.py). When
+# `<video_stem>_calib.json` exists next to a video (giving the near/far
+# stump pixel heights in a reference frame), pipeline/speed.py derives
+# that video's focal length and computes ball distance-from-camera at
+# every tracked frame directly from the ball's own apparent diameter
+# (pinhole model) -- accurate even for a partial track, unlike the
+# geometry.flight_distance_m fallback. These two constants are shared
+# across videos since they're standard cricket dimensions, not per-venue.
+calibration:
+  stump_height_m: 0.711    # regulation stump height (28in), matches the wicket_distance_m the source project's own ball_speed.py calibration tool used
+  pitch_length_m: 20.12    # regulation stumps-to-stumps pitch length (22 yards)
+  # Speed is fit from the ball's estimated distance-from-camera z(t) over
+  # the track's real (non-kalman_predicted) frames. But a track can run on
+  # past where the real ball was lost (e.g. zoom_track_detect.py's motion-
+  # diff rescue locking onto a catcher's hands once the ball arrives) --
+  # z(t) then stops increasing and starts wandering, which a plain
+  # endpoint-to-endpoint or least-squares fit over the WHOLE track would
+  # silently corrupt. Instead: walk forward from the first frame, tracking
+  # a running max of z (smoothed over smoothing_window frames); once z
+  # drops more than reversal_tolerance_m below that running max for
+  # reversal_confirm_frames consecutive frames running, treat that as the
+  # real ball having been lost and fit only the prefix before it.
+  # Tuned against delivery_4/7/19/21's actual z(t) noise (see scratch
+  # investigation in conversation history): diam_px is often single-digit
+  # pixels for much of a receding ball's flight, so per-frame z jitters by
+  # several METERS even within a visually-confirmed-correct stretch of
+  # track -- a tight tolerance (originally 0.5) mistook that noise for a
+  # trend break and cut delivery_4's genuinely-good 42-frame run down to
+  # 5. reversal_tolerance_m=3.0 absorbs that local jitter while still
+  # catching the much larger (~15-20m), sustained reversal a real drift
+  # onto a non-ball object produces.
+  smoothing_window: 7
+  reversal_tolerance_m: 3.0
+  reversal_confirm_frames: 6
+  min_frames_for_fit: 5    # below this many usable (post-trim) frames, the fit is too noisy to trust -- see speed.py: quality flag "few_calibrated_frames"
+  # Below this r^2, the fitted line is a poor match for the observed
+  # distance-vs-time points even after trimming -- a real signal that
+  # something in the track (drift onto a non-ball object, bad diameter
+  # measurements) is still corrupting it. Set low, not near 1.0: even a
+  # verified-correct track only reaches ~0.35-0.8 here, since diam_px
+  # quantization noise dominates the pinhole-distance estimate -- but
+  # observed drift-corrupted tracks (delivery_7.mp4's entire post-release
+  # track locks onto the bowler's own follow-through motion, confirmed by
+  # visual inspection) score noticeably lower still (~0.1-0.2), so this
+  # threshold is chosen to separate the two, not to demand a strong fit.
+  min_fit_r2: 0.25
 
 speed:
   # Plausible bowling-speed sanity bounds (km/h). Estimates outside this
@@ -45,6 +98,14 @@ detection:
   mog2_history: 400
   mog2_var_threshold: 24
   mog2_detect_shadows: false
+  # Frames spent building up the activity map (see activity_decay/
+  # activity_max below) before lab_scale_detect.py emits ANY candidates --
+  # was a hardcoded 40 until short clips arrived (~140-180 frames each,
+  # release happening in the first third) where a 40-frame blind spot ate
+  # the actual delivery. 15 still gives MOG2's background model and the
+  # activity map a real head start on the original ~300-360 frame clips
+  # (where this was tuned) without costing as much of a short one.
+  warmup_frames: 15
   # Candidate blob filtering
   min_ball_area_px: 6
   max_ball_area_px: 2500
@@ -207,6 +268,42 @@ zoom_track_detect:
   motion_rescue_min_area_px: 4
   motion_rescue_max_area_px: 350   # generous headroom since the ball's apparent size here is shrinking, not growing (see SCHEMA.md note on this footage's camera placement)
   motion_rescue_max_aspect_ratio: 3.0
+  # Size-consistency gate applied to BOTH the LAB-gate and motion-diff-
+  # rescue confirmation paths (see _size_ok()) -- same philosophy as
+  # track.py's own tracker gating: reject a same-neighborhood candidate
+  # whose implied diameter is wildly different from the track's current
+  # expected size (an EMA over confirmed diam_px, see diam_ema_alpha).
+  # Needed because, once the true ball is genuinely lost, a same-distance
+  # gate alone isn't enough -- e.g. the bowler's own follow-through arm is
+  # also "a compact moving blob near the prediction" and can otherwise
+  # hijack the track (observed on delivery_7.mp4 before this was added).
+  size_ratio_min: 0.4
+  size_ratio_max: 2.5
+  diam_ema_alpha: 0.4       # weight on the newest confirmed diam_px when updating the EMA
+  # Direction-consistency gate applied to ALL THREE confirmation paths
+  # (LAB-gate, motion-diff rescue, YOLO-crop rescue) -- see _direction_ok().
+  # Added after size-consistency alone still let zoom_track_detect.py lock
+  # onto the bowler's own follow-through motion on delivery_7.mp4: his
+  # limbs are also roughly ball-sized, but their step-to-step direction
+  # bears no relation to the ball's established heading. Measured against
+  # delivery_7.mp4's confirmed real release trajectory (frames 124-133):
+  # implied heading held within a ~13-degree band; once the real ball was
+  # lost, subsequent (wrong) confirmations swung by 80-300 degrees frame to
+  # frame. min_direction_cos=0.5 accepts up to +-60 degrees of deviation
+  # from the heading EMA -- generous enough for real projectile curvature,
+  # nowhere near the ~110+-degree swings the wrong-object case produced.
+  min_direction_cos: 0.5
+  direction_ema_alpha: 0.35 # weight on the newest confirmed step direction when updating the heading EMA
+  # Decay applied to the extrapolation velocity on every frame that ends
+  # with NO confirmation (LAB, motion-diff, or YOLO-crop all missed). A
+  # receding ball decelerates in image-space, so holding velocity constant
+  # across a run of misses makes the prediction overshoot further and
+  # further from the ball's true position -- which both makes it harder to
+  # ever reconfirm the real ball AND raises the odds the widened search
+  # window drifts onto an unrelated nearby mover instead. Decaying pulls
+  # the prediction back toward the last confirmed position as misses
+  # accumulate, which is the safer default when position is uncertain.
+  missed_velocity_decay: 0.75
   motion_rescue_conf: 0.20         # fixed, low -- pure motion+shape evidence with no color/class signal, same low-then-filter-downstream philosophy as detection.yolo_conf_threshold
   roi_half_size_px: 70      # crop window for the YOLO-crop rescue is a (2*roi_half_size_px) square
   upscale_factor: 4

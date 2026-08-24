@@ -36,7 +36,9 @@ app = Flask(
     template_folder=str(VIEWER_DIR / "templates"),
 )
 
-_DUP_SUFFIX_RE = re.compile(r"\(\d+\)\.mp4$", re.IGNORECASE)
+_DUP_SUFFIX_RE = re.compile(r"\(\d+\)\.(mp4|mov)$", re.IGNORECASE)
+_VIDEO_EXTENSIONS = ("*.mp4", "*.mov")
+_MIMETYPES = {".mp4": "video/mp4", ".mov": "video/quicktime"}
 
 # Raw per-detector candidate dumps the source filter in the viewer can
 # switch to (see pipeline/run_diagnostics.py) -- each is a flat list of
@@ -52,19 +54,28 @@ def _safe_stem(raw: str) -> str:
 
 
 def list_videos():
-    """Enumerate Takneek/*.mp4, de-duped by filesize (re-uploaded dupes
-    carry a literal "(1)" suffix in the filename per SCHEMA.md), and
+    """Enumerate videos_dir/*.{mp4,mov}, de-duped by filesize (re-uploaded
+    dupes carry a literal "(1)" suffix in the filename per SCHEMA.md), and
     flag whether runs/<stem>/detections.json exists yet."""
     if not VIDEOS_DIR.is_dir():
         return []
 
+    seen_paths: set[Path] = set()
     by_size = {}
-    for p in sorted(VIDEOS_DIR.glob("*.mp4")):
-        try:
-            size = p.stat().st_size
-        except OSError:
-            continue
-        by_size.setdefault(size, []).append(p)
+    for pattern in _VIDEO_EXTENSIONS:
+        for p in sorted(VIDEOS_DIR.glob(pattern)):
+            # A case-insensitive filesystem (macOS default) can match the
+            # same file under more than one glob pattern above -- skip it
+            # the second time rather than double-counting/double-listing.
+            resolved = p.resolve()
+            if resolved in seen_paths:
+                continue
+            seen_paths.add(resolved)
+            try:
+                size = p.stat().st_size
+            except OSError:
+                continue
+            by_size.setdefault(size, []).append(p)
 
     videos = []
     for size, paths in by_size.items():
@@ -179,7 +190,8 @@ def media(filename):
     full_path = VIDEOS_DIR / safe_name
     if not full_path.is_file():
         abort(404)
-    resp: Response = send_from_directory(VIDEOS_DIR, safe_name, conditional=True, mimetype="video/mp4")
+    mimetype = _MIMETYPES.get(full_path.suffix.lower(), "video/mp4")
+    resp: Response = send_from_directory(VIDEOS_DIR, safe_name, conditional=True, mimetype=mimetype)
     return resp
 
 

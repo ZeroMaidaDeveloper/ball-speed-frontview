@@ -14,6 +14,7 @@ from typing import Any
 import cv2
 import yaml
 
+from calibration import focal_length_px, load_calibration
 from speed import compute_delivery_speed
 from track import segment_deliveries
 from zoom_track_detect import detect_candidates as zoom_track_detect_candidates
@@ -72,13 +73,20 @@ def run(video_path: str, config: dict[str, Any], cache_dir: Path | None = None) 
 
     candidates = _detect_or_reuse_cached("zoom_track", zoom_track_detect_candidates, video_path, config, cache_dir)
 
+    calib = load_calibration(video_path)
+    f_px = focal_length_px(calib, config) if calib else None
+    print(
+        f"[run] calibration: {'f_px=' + format(f_px, '.0f') if f_px else 'none (using flight_distance_m fallback)'}",
+        flush=True,
+    )
+
     print(f"[run] segmenting deliveries from {len(candidates)} total candidates ...", flush=True)
     deliveries = segment_deliveries(candidates, config)
     print(f"[run] raw deliveries: {len(deliveries)}", flush=True)
 
     out_deliveries = []
     for i, delivery in enumerate(deliveries):
-        d = compute_delivery_speed(delivery, config)
+        d = compute_delivery_speed(delivery, config, f_px)
         d["id"] = i
         out_deliveries.append(d)
 
