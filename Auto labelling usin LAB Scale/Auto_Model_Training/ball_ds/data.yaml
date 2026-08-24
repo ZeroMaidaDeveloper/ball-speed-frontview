@@ -1,0 +1,5 @@
+path: /Users/takneekmacmini/Documents/Pitch Hit Ball/files/test/ball_ds
+train: images/train
+val: images/val
+names:
+  0: ball

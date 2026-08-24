@@ -1,0 +1,219 @@
+# Cricket ball speed pipeline configuration.
+# The single most important accuracy lever is `flight_distance_m` below —
+# everything else only needs to be roughly right given the +-10 km/h target.
+
+paths:
+  videos_dir: "."
+  frames_dir: "data/frames"
+  labels_dir: "data/labels"
+  models_dir: "models"
+  runs_dir: "runs"
+  yolo_weights: "models/ball_yolo26s.pt"   # written by training/train_yolo.py
+
+# Real-world constants
+ball:
+  diameter_m: 0.0715          # standard men's cricket ball diameter
+
+geometry:
+  # Approximate real-world distance (meters) the ball travels from the
+  # release-detection frame to the arrival-detection frame in THIS nets
+  # setup (camera at the batting end). This is a rough default
+  # (crease-to-crease ~17.68m minus a release offset); override per-venue
+  # if the actual measured distance is known. This constant dominates the
+  # error budget far more than detector/tracker accuracy does.
+  flight_distance_m: 17.0
+
+speed:
+  # Plausible bowling-speed sanity bounds (km/h). Estimates outside this
+  # range are flagged low-confidence rather than silently reported.
+  min_plausible_kmh: 40
+  max_plausible_kmh: 160
+  # Smoothing window (frames) for the secondary size-based speed curve.
+  size_curve_smoothing_window: 5
+
+detection:
+  # LAB a*-channel "red-ness" thresholds. NOT a hard color gate -- in this
+  # footage the ball's worn-leather color overlaps players' pink/magenta
+  # shirts seen through the net, so pipeline/classical_detect.py only uses
+  # these as a soft confidence nudge on top of motion+shape filtering (real
+  # discrimination comes from track.py's downstream motion-continuity
+  # gating). See pipeline/classical_detect.py module docstring.
+  lab_a_channel_min: 150
+  lab_l_channel_min: 40
+  lab_l_channel_max: 220
+  # MOG2 background subtractor params
+  mog2_history: 400
+  mog2_var_threshold: 24
+  mog2_detect_shadows: false
+  # Candidate blob filtering
+  min_ball_area_px: 6
+  max_ball_area_px: 2500
+  min_circularity: 0.55
+  # Recurring-motion suppression: netting/leaves flap in roughly the same
+  # spot for many consecutive frames, unlike the ball which sweeps through
+  # a new position every frame. Each pixel accumulates
+  # `activity = activity*activity_decay + is_foreground` per frame; a blob
+  # is dropped as noise if its mean activity exceeds activity_max (i.e. that
+  # spot has been flickering foreground repeatedly, not just this once).
+  # Empirically tuned against Takneek/1000313863.mp4 (see pipeline/
+  # classical_detect.py): without this, MOG2 alone throws ~24 candidate
+  # blobs/frame of net/leaf texture and the tracker locks onto noise.
+  activity_decay: 0.98
+  activity_max: 0.5
+  # YOLO hybrid fusion. models/ball_yolo26s.pt is currently just the stock
+  # COCO-pretrained yolo26s checkpoint (no cricket-ball fine-tuning yet) --
+  # its generic "sports ball" class empirically already tracks the ball in
+  # this footage (see pipeline/yolo_detect.py docstring), but at low
+  # confidence (observed ~0.10-0.5 on confirmed real ball frames), so the
+  # emission threshold is set low and downstream motion/shape filtering in
+  # track.py does the real noise rejection -- same philosophy as
+  # classical_detect.py's activity filter.
+  yolo_conf_threshold: 0.10
+  yolo_min_conf_trust: 0.45   # above this, trust YOLO without classical corroboration
+  # Shared by yolo_detect.py and lab_scale_detect.py: restrict candidates
+  # to <video>_roi.json's polygon (pipeline/roi_utils.py) when one exists
+  # next to the video. A full-frame YOLO pass has no person exclusion of
+  # its own and routinely outnumbered lab_scale_detect.py's candidates
+  # 10-30x on real clips -- this was the dominant remaining noise source
+  # once lab_scale_detect.py gained ROI + person-mask filtering.
+  use_roi: true
+
+tracking:
+  # Frame-to-frame association gating
+  max_center_jump_px: 140
+  max_missed_frames_bridge: 6      # Kalman-predicted bridge across short net-occlusion gaps
+  delivery_gap_merge_s: 0.4        # merge two tracks separated by less than this (occlusion fragment)
+  delivery_boundary_gap_s: 1.5     # gap larger than this = genuinely a new delivery
+  min_track_len_frames: 5          # discard tracks shorter than this as noise
+  # A real delivery's apparent diameter changes substantially over the
+  # track -- but the DIRECTION depends on camera placement, and this
+  # project has footage of both kinds: a camera at the batting end sees
+  # the ball grow as it approaches; the delivery_4/7/19/21.mp4 nets
+  # footage instead has the camera near the bowling end (confirmed by
+  # visual inspection -- the bowler fills the frame at release, the
+  # striker is small and distant), so the ball SHRINKS as it recedes
+  # (observed diam_growth_ratio ~0.37-0.74 on real tracked deliveries
+  # there once pipeline/zoom_track_detect.py's motion-diff rescue
+  # extended tracking well past release -- see that module's docstring).
+  # A static/jittering background blob (netting, leaves) does neither.
+  # min_diam_growth_ratio / max_diam_shrink_ratio are the growth/shrink
+  # thresholds (each computed as (median of last third real diam_px) /
+  # (median of first third)) required to keep a track -- chosen well
+  # beyond a real flight's ratio in either direction but short of what
+  # noise jitter alone produces. A track passes if EITHER condition holds
+  # (see pipeline/speed.py: _quality_flags -- "low_diam_change").
+  min_diam_growth_ratio: 1.6
+  max_diam_shrink_ratio: 0.7
+  # Constant-velocity gap-bridging (delivery_gap_merge_s/max_center_jump_px
+  # above) only works for short gaps where the ball's motion is locally
+  # linear. Near the end of a delivery, perspective makes the ball
+  # accelerate rapidly as it nears the camera, so a longer detection gap
+  # there produces a big, non-linear position jump that constant-velocity
+  # extrapolation correctly refuses to bridge -- which fragments the real
+  # delivery into two undersized, low-growth tracks that both get dropped.
+  # Ported from the user's own pipeline_common.py: fit_parabola() (cx
+  # linear-in-t, cy quadratic-in-t, iterative 2.5-sigma outlier rejection)
+  # as a second, physics-aware merge test tried when the constant-velocity
+  # one fails or the gap is too long for it to even attempt.
+  parabola_gap_merge_s: 0.7      # wider allowance than delivery_gap_merge_s -- this path is physically grounded, not just extrapolated
+  parabola_max_jump_px: 260      # looser than max_center_jump_px -- extrapolation uncertainty grows with gap length
+  parabola_min_real_frames: 4    # minimum real (non-predicted) frames in the earlier track needed to trust a parabola fit
+
+heatmap_refine:
+  # A far-away ball is only a few pixels across in the full 1920x1080
+  # frame -- too small, relative to the image, for YOLO to reliably see,
+  # even though faint MOG2 motion + LAB color evidence exists at its true
+  # location (see pipeline/heatmap_refine.py). This crops+upscales a
+  # window around that evidence peak and re-runs YOLO on just that crop,
+  # where the ball takes up a much larger fraction of what the network
+  # sees.
+  roi_half_size_px: 90       # crop window is a (2*roi_half_size_px) square
+  upscale_factor: 4          # crop is resized up by this before YOLO sees it
+  heatmap_blur_ksize: 15     # Gaussian blur (odd) smoothing the combined MOG2+LAB evidence map
+  min_heatmap_peak: 40       # a connected evidence region below this peak isn't worth zooming into; combined evidence is 0..510 pre-blur
+  # A single global max per frame gets dominated by whatever produces the
+  # loudest evidence anywhere in the frame (almost always a player, not
+  # the far fainter ball) -- propose up to this many independent local
+  # peaks per frame instead, and let YOLO itself filter them. Kept low (2
+  # rather than 4): each extra peak is another YOLO call per frame, and on
+  # a long, unrestricted (no ROI) video this was the dominant cost of the
+  # whole pipeline -- a full run at max_peaks=4 didn't finish in over an
+  # hour even after batching crops per frame into one predict() call.
+  max_peaks: 2
+  # A player moving produces a much bigger blurred evidence blob than a
+  # small/far ball ever would -- drop connected components larger than
+  # this (in blurred-mask pixels, a coarser scale than
+  # detection.max_ball_area_px which is calibrated against tight unblurred
+  # contours) so player-sized blobs don't crowd out ball-sized proposals.
+  max_component_area_px: 4000
+  yolo_conf_threshold: 0.10  # same low-threshold-then-filter-downstream philosophy as detection.yolo_conf_threshold
+
+lab_scale_detect:
+  # Ported from the user's own labeling tool (Auto labelling usin LAB
+  # Scale/Auto_Model_Training/ball_label.py + ball_label_white.py) --
+  # see pipeline/lab_scale_detect.py for why this is a DELIBERATELY
+  # different tradeoff from detection.lab_* (hard color gate instead of a
+  # soft nudge, and MOG2 runs on a CLAHE-contrast-enhanced L channel
+  # instead of raw BGR) so the two approaches can be compared side by
+  # side in the viewer.
+  ball_color: red           # "red" | "white"
+  red_mean_a_min: 135       # hard gate (red ball): contour's mean LAB a* (OpenCV 0-255 scale) must be >= this
+  white_l_min: 190          # hard gate (white ball): contour's mean LAB L* must be >= this
+  white_chroma_max: 25      # hard gate (white ball): hypot(mean_a-128, mean_b-128) must be <= this
+  min_area_px: 3
+  max_area_px: 1200
+  min_fill_ratio: 0.35      # contourArea / (pi * minEnclosingCircle radius^2) -- a roundness measure
+  max_aspect_ratio: 3.0     # bounding-box long-side/short-side
+  clahe_clip_limit: 3.0
+  clahe_tile_grid: 8        # tile grid is (N, N)
+  # The two techniques that turned out to matter most once A/B'd against
+  # the full auto-label pipeline on real clips (see pipeline/roi_utils.py
+  # and pipeline/lab_scale_detect.py module docstring). ROI restriction is
+  # detection.use_roi (shared with yolo_detect.py); person-mask exclusion
+  # is specific to this module (yolo_detect.py doesn't run its own
+  # segmentation pass):
+  exclude_people: true       # drop any candidate centered inside a detected person's segmentation mask
+  person_seg_model: "yolov8n-seg.pt"
+  person_conf_threshold: 0.5
+  person_min_height_ratio: 0.30   # relative to the tallest detected person this frame
+  person_min_abs_height_px: 50
+  person_mask_interval: 2         # re-run person segmentation every N frames, reusing masks in between
+
+zoom_track_detect:
+  # Rather than scanning the whole (ROI-restricted) frame with YOLO every
+  # frame regardless of whether anything is happening, watch
+  # lab_scale_detect.py's cleaner motion+color candidates for a FAST-
+  # moving one -- the hallmark of a real ball in flight vs. noise or a
+  # slow-moving player -- then zoom into the predicted next position and
+  # run YOLO on just that crop. See pipeline/zoom_track_detect.py.
+  #
+  # Calibrated against delivery_4.mp4's confirmed real ball trajectory
+  # (frames 129-137 @ 50fps): consecutive-frame implied speed there was
+  # ~750-1050 px/s. fast_speed_px_s is set comfortably below that with
+  # margin, not at it, so real (if slightly slower) deliveries still
+  # trigger.
+  fast_speed_px_s: 400
+  max_search_gap_s: 0.15    # only compare two LAB hits for the speed trigger if they're within this much time of each other
+  track_gate_px: 80         # while tracking, a LAB candidate within this of the prediction confirms the track (tried before the motion-diff rescue and the YOLO-crop rescue); also used as the motion-diff rescue's own gate distance
+  # Three-frame-differencing rescue, tried after the LAB gate and before
+  # the YOLO-crop rescue -- see pipeline/zoom_track_detect.py: _motion_rescue().
+  # Calibrated against delivery_4.mp4's real ball (frames 137-149): it
+  # desaturates from bright red to near-black against the dark green net/
+  # foliage background well before it leaves the frame, defeating
+  # lab_scale_detect.py's hard color gate while remaining a clean, compact,
+  # consistently-sized moving blob.
+  motion_rescue_half_size_px: 45   # search window is a (2*this) square around the prediction
+  motion_rescue_diff_threshold: 15 # min per-pixel intensity change (0-255) on BOTH consecutive diffs to count as motion
+  motion_rescue_min_area_px: 4
+  motion_rescue_max_area_px: 350   # generous headroom since the ball's apparent size here is shrinking, not growing (see SCHEMA.md note on this footage's camera placement)
+  motion_rescue_max_aspect_ratio: 3.0
+  motion_rescue_conf: 0.20         # fixed, low -- pure motion+shape evidence with no color/class signal, same low-then-filter-downstream philosophy as detection.yolo_conf_threshold
+  roi_half_size_px: 70      # crop window for the YOLO-crop rescue is a (2*roi_half_size_px) square
+  upscale_factor: 4
+  yolo_conf_threshold: 0.10
+  max_missed_in_track: 6    # consecutive failed confirmations (LAB gate + motion-diff rescue + YOLO rescue) before dropping back to plain LAB scanning
+
+video:
+  # Nominal fps used only as a fallback; real per-frame timestamps are
+  # read from the video container (CAP_PROP_POS_MSEC) wherever possible.
+  fallback_fps: 30.0

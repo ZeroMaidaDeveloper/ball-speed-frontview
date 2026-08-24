@@ -1,0 +1,109 @@
+{
+  "video": "_mock.mp4",
+  "fps": 30.0,
+  "width": 1920,
+  "height": 1080,
+  "duration_s": 18.0,
+  "deliveries": [
+    {
+      "id": 0,
+      "start_frame": 120,
+      "end_frame": 145,
+      "start_t": 4.00,
+      "end_t": 4.83,
+      "speed_kmh": 118.4,
+      "speed_confidence": "high",
+      "quality_flags": [],
+      "frames": [
+        { "frame": 120, "t": 4.00, "bbox": [1500.0, 300.0, 1518.0, 318.0], "cx": 1509.0, "cy": 309.0, "diam_px": 18.0, "conf": 0.81, "source": "yolo" },
+        { "frame": 121, "t": 4.033, "bbox": [1440.0, 312.0, 1459.0, 331.0], "cx": 1449.5, "cy": 321.5, "diam_px": 19.0, "conf": 0.83, "source": "yolo" },
+        { "frame": 122, "t": 4.067, "bbox": [1378.0, 325.0, 1398.0, 345.0], "cx": 1388.0, "cy": 335.0, "diam_px": 20.0, "conf": 0.79, "source": "yolo" },
+        { "frame": 123, "t": 4.100, "bbox": [1314.0, 339.0, 1336.0, 361.0], "cx": 1325.0, "cy": 350.0, "diam_px": 22.0, "conf": 0.76, "source": "classical" },
+        { "frame": 124, "t": 4.133, "bbox": [1248.0, 355.0, 1272.0, 379.0], "cx": 1260.0, "cy": 367.0, "diam_px": 24.0, "conf": 0.72, "source": "classical" },
+        { "frame": 125, "t": 4.167, "bbox": [1179.0, 372.0, 1206.0, 399.0], "cx": 1192.5, "cy": 385.5, "diam_px": 27.0, "conf": 0.65, "source": "classical" },
+        { "frame": 126, "t": 4.200, "bbox": [1107.0, 392.0, 1137.0, 422.0], "cx": 1122.0, "cy": 407.0, "diam_px": 30.0, "conf": 0.55, "source": "kalman_predicted" },
+        { "frame": 127, "t": 4.233, "bbox": [1032.0, 414.0, 1065.0, 447.0], "cx": 1048.5, "cy": 430.5, "diam_px": 33.0, "conf": 0.50, "source": "kalman_predicted" },
+        { "frame": 128, "t": 4.267, "bbox": [954.0, 439.0, 991.0, 476.0], "cx": 972.5, "cy": 457.5, "diam_px": 37.0, "conf": 0.68, "source": "classical" },
+        { "frame": 129, "t": 4.300, "bbox": [872.0, 467.0, 913.0, 508.0], "cx": 892.5, "cy": 487.5, "diam_px": 41.0, "conf": 0.74, "source": "classical" },
+        { "frame": 130, "t": 4.333, "bbox": [786.0, 498.0, 832.0, 544.0], "cx": 809.0, "cy": 521.0, "diam_px": 46.0, "conf": 0.80, "source": "yolo" },
+        { "frame": 131, "t": 4.367, "bbox": [696.0, 533.0, 747.0, 584.0], "cx": 721.5, "cy": 558.5, "diam_px": 51.0, "conf": 0.85, "source": "yolo" },
+        { "frame": 132, "t": 4.400, "bbox": [601.0, 572.0, 658.0, 629.0], "cx": 629.5, "cy": 600.5, "diam_px": 57.0, "conf": 0.88, "source": "yolo" },
+        { "frame": 133, "t": 4.433, "bbox": [501.0, 615.0, 565.0, 679.0], "cx": 533.0, "cy": 647.0, "diam_px": 64.0, "conf": 0.90, "source": "yolo" },
+        { "frame": 134, "t": 4.467, "bbox": [395.0, 663.0, 467.0, 735.0], "cx": 431.0, "cy": 699.0, "diam_px": 72.0, "conf": 0.91, "source": "yolo" },
+        { "frame": 135, "t": 4.500, "bbox": [283.0, 717.0, 364.0, 798.0], "cx": 323.5, "cy": 757.5, "diam_px": 81.0, "conf": 0.92, "source": "yolo" },
+        { "frame": 136, "t": 4.533, "bbox": [165.0, 778.0, 256.0, 869.0], "cx": 210.5, "cy": 823.5, "diam_px": 91.0, "conf": 0.90, "source": "yolo" },
+        { "frame": 137, "t": 4.567, "bbox": [40.0, 846.0, 143.0, 949.0], "cx": 91.5, "cy": 897.5, "diam_px": 103.0, "conf": 0.86, "source": "yolo" }
+      ],
+      "size_speed_curve": [
+        { "t": 4.02, "speed_kmh": 121.0 },
+        { "t": 4.10, "speed_kmh": 119.5 },
+        { "t": 4.18, "speed_kmh": 117.8 },
+        { "t": 4.26, "speed_kmh": 116.9 },
+        { "t": 4.34, "speed_kmh": 118.2 },
+        { "t": 4.42, "speed_kmh": 119.0 },
+        { "t": 4.50, "speed_kmh": 117.6 },
+        { "t": 4.58, "speed_kmh": 116.1 }
+      ]
+    },
+    {
+      "id": 1,
+      "start_frame": 340,
+      "end_frame": 361,
+      "start_t": 11.33,
+      "end_t": 12.03,
+      "speed_kmh": 96.7,
+      "speed_confidence": "medium",
+      "quality_flags": ["occlusion_gap"],
+      "frames": [
+        { "frame": 340, "t": 11.333, "bbox": [1560.0, 260.0, 1576.0, 276.0], "cx": 1568.0, "cy": 268.0, "diam_px": 16.0, "conf": 0.77, "source": "yolo" },
+        { "frame": 341, "t": 11.367, "bbox": [1500.0, 275.0, 1517.0, 292.0], "cx": 1508.5, "cy": 283.5, "diam_px": 17.0, "conf": 0.75, "source": "yolo" },
+        { "frame": 342, "t": 11.400, "bbox": [1438.0, 291.0, 1456.0, 309.0], "cx": 1447.0, "cy": 300.0, "diam_px": 18.0, "conf": 0.71, "source": "classical" },
+        { "frame": 343, "t": 11.433, "bbox": [1374.0, 308.0, 1393.0, 327.0], "cx": 1383.5, "cy": 317.5, "diam_px": 19.0, "conf": 0.60, "source": "classical" },
+        { "frame": 344, "t": 11.467, "bbox": [1306.0, 327.0, 1327.0, 348.0], "cx": 1316.5, "cy": 337.5, "diam_px": 21.0, "conf": 0.52, "source": "kalman_predicted" },
+        { "frame": 345, "t": 11.500, "bbox": [1235.0, 348.0, 1258.0, 371.0], "cx": 1246.5, "cy": 359.5, "diam_px": 23.0, "conf": 0.48, "source": "kalman_predicted" },
+        { "frame": 346, "t": 11.533, "bbox": [1161.0, 371.0, 1186.0, 396.0], "cx": 1173.5, "cy": 383.5, "diam_px": 25.0, "conf": 0.45, "source": "kalman_predicted" },
+        { "frame": 347, "t": 11.567, "bbox": [1082.0, 397.0, 1110.0, 425.0], "cx": 1096.0, "cy": 411.0, "diam_px": 28.0, "conf": 0.62, "source": "classical" },
+        { "frame": 348, "t": 11.600, "bbox": [999.0, 426.0, 1030.0, 457.0], "cx": 1014.5, "cy": 441.5, "diam_px": 31.0, "conf": 0.70, "source": "classical" },
+        { "frame": 349, "t": 11.633, "bbox": [911.0, 458.0, 946.0, 493.0], "cx": 928.5, "cy": 475.5, "diam_px": 35.0, "conf": 0.78, "source": "yolo" },
+        { "frame": 350, "t": 11.667, "bbox": [818.0, 494.0, 858.0, 534.0], "cx": 838.0, "cy": 514.0, "diam_px": 40.0, "conf": 0.82, "source": "yolo" },
+        { "frame": 351, "t": 11.700, "bbox": [720.0, 534.0, 765.0, 579.0], "cx": 742.5, "cy": 556.5, "diam_px": 45.0, "conf": 0.85, "source": "yolo" },
+        { "frame": 352, "t": 11.733, "bbox": [617.0, 578.0, 668.0, 629.0], "cx": 642.5, "cy": 603.5, "diam_px": 51.0, "conf": 0.87, "source": "yolo" },
+        { "frame": 353, "t": 11.767, "bbox": [509.0, 627.0, 567.0, 685.0], "cx": 538.0, "cy": 656.0, "diam_px": 58.0, "conf": 0.88, "source": "yolo" },
+        { "frame": 354, "t": 11.800, "bbox": [395.0, 682.0, 461.0, 748.0], "cx": 428.0, "cy": 715.0, "diam_px": 66.0, "conf": 0.86, "source": "yolo" },
+        { "frame": 355, "t": 11.833, "bbox": [277.0, 743.0, 352.0, 818.0], "cx": 314.5, "cy": 780.5, "diam_px": 75.0, "conf": 0.83, "source": "yolo" }
+      ],
+      "size_speed_curve": [
+        { "t": 11.35, "speed_kmh": 99.1 },
+        { "t": 11.44, "speed_kmh": 97.8 },
+        { "t": 11.53, "speed_kmh": 95.4 },
+        { "t": 11.62, "speed_kmh": 94.9 },
+        { "t": 11.71, "speed_kmh": 96.2 },
+        { "t": 11.80, "speed_kmh": 97.5 }
+      ]
+    },
+    {
+      "id": 2,
+      "start_frame": 470,
+      "end_frame": 486,
+      "start_t": 15.67,
+      "end_t": 16.20,
+      "speed_kmh": 137.9,
+      "speed_confidence": "low",
+      "quality_flags": ["short_track", "speed_out_of_range"],
+      "frames": [
+        { "frame": 470, "t": 15.667, "bbox": [1610.0, 340.0, 1624.0, 354.0], "cx": 1617.0, "cy": 347.0, "diam_px": 14.0, "conf": 0.58, "source": "classical" },
+        { "frame": 471, "t": 15.700, "bbox": [1520.0, 353.0, 1536.0, 369.0], "cx": 1528.0, "cy": 361.0, "diam_px": 16.0, "conf": 0.55, "source": "classical" },
+        { "frame": 472, "t": 15.733, "bbox": [1424.0, 368.0, 1442.0, 386.0], "cx": 1433.0, "cy": 377.0, "diam_px": 18.0, "conf": 0.40, "source": "kalman_predicted" },
+        { "frame": 473, "t": 15.767, "bbox": [1322.0, 385.0, 1343.0, 405.0], "cx": 1332.5, "cy": 395.0, "diam_px": 21.0, "conf": 0.38, "source": "kalman_predicted" },
+        { "frame": 474, "t": 15.800, "bbox": [1213.0, 404.0, 1237.0, 427.0], "cx": 1225.0, "cy": 415.5, "diam_px": 24.0, "conf": 0.61, "source": "classical" },
+        { "frame": 475, "t": 15.833, "bbox": [1097.0, 426.0, 1124.0, 452.0], "cx": 1110.5, "cy": 439.0, "diam_px": 27.0, "conf": 0.69, "source": "yolo" },
+        { "frame": 476, "t": 15.867, "bbox": [973.0, 452.0, 1004.0, 481.0], "cx": 988.5, "cy": 466.5, "diam_px": 31.0, "conf": 0.75, "source": "yolo" },
+        { "frame": 477, "t": 15.900, "bbox": [841.0, 481.0, 877.0, 515.0], "cx": 859.0, "cy": 498.0, "diam_px": 36.0, "conf": 0.79, "source": "yolo" },
+        { "frame": 478, "t": 15.933, "bbox": [700.0, 516.0, 741.0, 555.0], "cx": 720.5, "cy": 535.5, "diam_px": 41.0, "conf": 0.80, "source": "yolo" },
+        { "frame": 479, "t": 15.967, "bbox": [550.0, 557.0, 598.0, 602.0], "cx": 574.0, "cy": 579.5, "diam_px": 48.0, "conf": 0.77, "source": "yolo" },
+        { "frame": 480, "t": 16.000, "bbox": [390.0, 605.0, 447.0, 658.0], "cx": 418.5, "cy": 631.5, "diam_px": 57.0, "conf": 0.72, "source": "classical" }
+      ],
+      "size_speed_curve": []
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "points": [
+    [
+      593,
+      549
+    ],
+    [
+      595,
+      729
+    ]
+  ],
+  "pixel_distance": 180.01111076819674,
+  "pixels_per_meter": 253.53677572985458,
+  "wicket_distance_m": 0.71,
+  "frame_size": [
+    1920,
+    1080
+  ]
+}

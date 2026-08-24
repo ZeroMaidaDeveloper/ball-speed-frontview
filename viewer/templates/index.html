@@ -1,0 +1,78 @@
+<title>Ball Speed Viewer</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+
+<header>
+  <h1>Ball Speed Viewer</h1>
+  <select id="video-select">
+    <option value="">Loading videos…</option>
+  </select>
+  <select id="source-select">
+    <option value="pipeline">Full pipeline (lab_scale+zoom_track -> tracked deliveries)</option>
+    <option value="motion_only">MOG2 detections only (raw, untracked)</option>
+    <option value="color_only">LAB color detections only (raw, untracked)</option>
+    <option value="lab_scale">LAB-scale (CLAHE + hard color gate) only (raw, untracked)</option>
+    <option value="yolo">YOLO detections only (raw, untracked)</option>
+    <option value="yolo_refined">YOLO (heatmap-refined ROI zoom) only (raw, untracked)</option>
+    <option value="auto_label">Your auto-label pipeline (ROI + person-mask + choose())</option>
+    <option value="zoom_track">Zoom-track (fast-LAB-trigger + predicted-zoom tracking) -- feeds the fused pipeline</option>
+  </select>
+  <select id="lab-channel-select" style="display:none;">
+    <option value="none">Video (no LAB filter)</option>
+    <option value="l">LAB: L channel (lightness)</option>
+    <option value="a">LAB: A channel (green&#8594;red)</option>
+    <option value="b">LAB: B channel (blue&#8594;yellow)</option>
+    <option value="mask">LAB: ball color mask (highlighted)</option>
+    <option value="jet">LAB: A-channel JET render (matches your ball_label.py render_lab())</option>
+  </select>
+  <span id="video-meta"></span>
+</header>
+
+<main>
+  <section class="player-col">
+    <div class="stage" id="stage">
+      <video id="video" preload="metadata"></video>
+      <canvas id="lab-canvas" style="display:none;"></canvas>
+      <canvas id="overlay"></canvas>
+      <div class="no-data-banner" id="no-data-banner">No tracking data for this video yet.</div>
+    </div>
+
+    <div class="controls">
+      <button id="btn-step-back" title="Step back one frame">&laquo; frame</button>
+      <button id="btn-play" title="Play / pause">Play</button>
+      <button id="btn-step-fwd" title="Step forward one frame">frame &raquo;</button>
+      <input type="range" id="seek-bar" min="0" max="1000" value="0" step="1" />
+      <span class="fps-label" id="fps-label"></span>
+    </div>
+
+    <div class="legend">
+      <span><span class="swatch" style="background:#4da3ff"></span>yolo</span>
+      <span><span class="swatch" style="background:#c77dff"></span>yolo_refined</span>
+      <span><span class="swatch" style="background:#4ddc8c"></span>classical</span>
+      <span><span class="swatch" style="background:#ffb84d"></span>lab_scale</span>
+      <span><span class="swatch" style="background:#ff4d94"></span>auto_label</span>
+      <span><span class="swatch" style="background:#5df2d6"></span>zoom_track</span>
+      <span><span class="swatch" style="background:#ffe14d"></span>motion_rescue</span>
+      <span><span class="swatch" style="background:#ff6b6b; opacity:0.6"></span>kalman_predicted (dashed / low opacity)</span>
+    </div>
+  </section>
+
+  <aside>
+    <div class="panel" id="deliveries-panel">
+      <h2>Deliveries</h2>
+      <ul id="delivery-list"></ul>
+      <div class="empty-note" id="delivery-empty-note" style="display:none;">No deliveries in this video's detections.json.</div>
+    </div>
+
+    <div class="panel" id="raw-mode-panel" style="display:none;">
+      <h2>Raw candidates</h2>
+      <p id="raw-mode-note" class="empty-note"></p>
+    </div>
+
+    <div class="panel" id="curve-panel" style="display:none;">
+      <h2>Size-based speed curve</h2>
+      <canvas id="curve-canvas" width="280" height="140"></canvas>
+    </div>
+  </aside>
+</main>
+
+<script src="{{ url_for('static', filename='viewer.js') }}"></script>

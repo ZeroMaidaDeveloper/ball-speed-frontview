@@ -1,0 +1,273 @@
+:root {
+  --bg: #14161a;
+  --panel: #1d2026;
+  --panel-alt: #262a32;
+  --border: #33383f;
+  --text: #e6e8eb;
+  --text-dim: #9aa0aa;
+  --accent: #4da3ff;
+  --high: #4ddc8c;
+  --medium: #f0c14b;
+  --low: #ff6b6b;
+  font-size: 15px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+header h1 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  white-space: nowrap;
+}
+
+#video-select,
+#source-select,
+#lab-channel-select {
+  background: var(--panel-alt);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 14px;
+}
+
+#video-select {
+  min-width: 260px;
+}
+
+#source-select,
+#lab-channel-select {
+  min-width: 220px;
+}
+
+#video-meta {
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
+  padding: 16px;
+  align-items: start;
+}
+
+.player-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.stage {
+  position: relative;
+  width: 100%;
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  line-height: 0;
+}
+
+.stage video {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.stage canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.no-data-banner {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  font-size: 13px;
+  display: none;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.controls button {
+  background: var(--panel-alt);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.controls button:hover {
+  background: #30353d;
+}
+
+.controls .fps-label {
+  color: var(--text-dim);
+  font-size: 12px;
+  margin-left: auto;
+}
+
+#seek-bar {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+.legend {
+  display: flex;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--text-dim);
+  flex-wrap: wrap;
+}
+
+.legend .swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+
+aside {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.panel h2 {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+
+#delivery-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+#delivery-list li {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+  background: var(--panel-alt);
+}
+
+#delivery-list li:hover {
+  border-color: var(--accent);
+}
+
+#delivery-list li.active {
+  border-color: var(--accent);
+  background: #1e2c3d;
+}
+
+.delivery-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.delivery-speed {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.confidence-badge {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.confidence-high {
+  background: rgba(77, 220, 140, 0.18);
+  color: var(--high);
+}
+
+.confidence-medium {
+  background: rgba(240, 193, 75, 0.18);
+  color: var(--medium);
+}
+
+.confidence-low {
+  background: rgba(255, 107, 107, 0.18);
+  color: var(--low);
+}
+
+.quality-flags {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.empty-note {
+  color: var(--text-dim);
+  font-size: 13px;
+  padding: 6px 0;
+}
+
+#curve-canvas {
+  width: 100%;
+  height: 140px;
+  display: block;
+}

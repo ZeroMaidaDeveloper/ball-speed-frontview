@@ -1,0 +1,29 @@
+# Large source footage -- exceeds GitHub's 100MB file limit and isn't
+# reproducible from code anyway.
+frontViewVideo.mp4
+
+# Redundant archive of "Auto labelling usin LAB Scale/" (already extracted
+# and tracked directly).
+Auto labelling usin LAB Scale-*.zip
+
+# Stock, unmodified Ultralytics checkpoints -- redownloadable, not
+# project-specific work. See README for how to fetch them.
+*.pt
+
+# Python virtualenv (machine-specific, regenerable via requirements).
+myenv/
+
+# Scratch/experimental working directories.
+scratch/
+scratch_frames/
+
+# Old pipeline run whose source video (frontViewVideo.mp4) isn't tracked
+# and predates the current detection/tracking logic.
+runs/frontViewVideo/
+
+__pycache__/
+*.pyc
+.DS_Store
+
+# Local Claude Code project state, not part of the shipped project.
+.claude/
