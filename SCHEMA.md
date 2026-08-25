@@ -77,8 +77,16 @@ Notes:
   real-world distance-from-camera, derived every frame from its own
   apparent diameter via a per-video calibrated focal length, over time;
   see `pipeline/calibration.py` and `pipeline/speed.py`:
-  `_trim_and_fit_distance`) or `"flight_distance_fallback"` (used only
-  when the video has no `<video_stem>_calib.json` sidecar -- divides
+  `_trim_and_fit_distance`), `"planar_pixel_speed"` (weaker -- used only
+  when the video has no `<video_stem>_calib.json` but does have a
+  `<video_stem>_wickets_calib.json`, a single-plane pixels-per-meter scale
+  for footage where not even a far-end wicket is visible to derive a real
+  focal length from; converts the track's total pixel path length
+  directly to metres with no depth/perspective model at all -- see
+  `pipeline/calibration.py` module docstring and `pipeline/speed.py`:
+  `_planar_pixel_speed`; flagged via `quality_flags:
+  "planar_calibration_estimate"`), or `"flight_distance_fallback"` (used
+  only when the video has no calibration sidecar of either kind -- divides
   `config.yaml: geometry.flight_distance_m` by the tracked duration, which
   is only accurate if the track happens to span the whole release-to-
   arrival flight; flagged via `quality_flags: "uncalibrated_speed_estimate"`).
@@ -97,13 +105,15 @@ Notes:
   tracking.min_diam_growth_ratio/max_diam_shrink_ratio`). Growth OR shrink
   both count as evidence of a real flight -- which one to expect depends
   on camera placement (see that config entry).
-  Speed-fit-specific flags: `"uncalibrated_speed_estimate"` (see
-  `speed_method` above), `"few_calibrated_frames"` (fewer than
-  `config.yaml: calibration.min_frames_for_fit` real frames survived
-  trimming), `"trimmed_non_monotonic_tail"` (part of the track was
-  excluded from the speed fit -- it's still present in `frames` for
-  display, just not trusted for `speed_kmh`), `"noisy_size_fit"` (the fit
-  itself has a low R², see `speed_fit_r2`).
+  Speed-fit-specific flags: `"uncalibrated_speed_estimate"` /
+  `"planar_calibration_estimate"` (see `speed_method` above),
+  `"few_calibrated_frames"` (fewer than `config.yaml:
+  calibration.min_frames_for_fit` real frames survived trimming, or --
+  for `planar_pixel_speed` -- fewer than that many real frames total),
+  `"trimmed_non_monotonic_tail"` (part of the track was excluded from the
+  speed fit -- it's still present in `frames` for display, just not
+  trusted for `speed_kmh`), `"noisy_size_fit"` (the fit itself has a low
+  R², see `speed_fit_r2`).
 - `diam_growth_ratio` (float) is attached by `track.py` alongside `frames`
   -- (median diam_px of the track's last third of real frames) / (median
   of its first third); this is what `low_diam_change` is driven by. A
@@ -155,11 +165,19 @@ edits.
   session isn't processed twice.
 - `<video_stem>_calib.json` sitting next to a video's REAL (symlink-
   resolved) path -- same lookup convention as `<video_stem>_roi.json`
-  (`pipeline/roi_utils.py`) -- gives that video's near/far stump pixel
-  heights for `pipeline/calibration.py`'s focal-length derivation, used by
-  `pipeline/speed.py`'s primary speed estimate. See that module's
-  docstring for the shape. Optional: a video without one falls back to
-  `speed_method: "flight_distance_fallback"`.
+  (`pipeline/roi_utils.py`) -- gives `pipeline/calibration.py` what it
+  needs to derive that video's focal length, used by `pipeline/speed.py`'s
+  primary speed estimate. Two shapes, see that module's docstring: near
+  stump pixel height + a directly measured camera-to-near-stumps distance
+  (preferred -- e.g. from a phone AR measuring app or a laser
+  rangefinder/tape measure taken once when the tripod is set up), or
+  near+far stump pixel heights (fallback, less accurate, no on-site
+  measurement needed). A video with neither may instead have a
+  `<video_stem>_wickets_calib.json` (checked only when `_calib.json`
+  doesn't exist) -- a weaker single-plane pixels-per-meter scale for
+  footage with no far-end wicket visible at all, giving
+  `speed_method: "planar_pixel_speed"`. A video with neither file falls
+  back to `speed_method: "flight_distance_fallback"`.
 - This pipeline handles both a camera near the batting end (ball
   approaches, grows in apparent size) and one near the bowling end (ball
   recedes, shrinks) -- see config.yaml: tracking.min_diam_growth_ratio /

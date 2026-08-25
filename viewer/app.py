@@ -14,6 +14,7 @@ Then open http://127.0.0.1:5050/
 
 import json
 import re
+import sys
 from pathlib import Path
 
 import yaml
@@ -23,6 +24,14 @@ from flask import Flask, Response, abort, jsonify, render_template, send_from_di
 
 VIEWER_DIR = Path(__file__).resolve().parent
 BASE_DIR = VIEWER_DIR.parent
+
+sys.path.insert(0, str(BASE_DIR / "pipeline"))
+from calibration import (  # noqa: E402
+    focal_length_px,
+    load_calibration,
+    load_wickets_calibration,
+    pixels_per_meter_from_wickets,
+)
 
 with (BASE_DIR / "config.yaml").open() as _f:
     _CONFIG = yaml.safe_load(_f)
@@ -101,6 +110,18 @@ def list_videos():
     return videos
 
 
+def _canonical_video_path(stem: str) -> Path | None:
+    """The canonical (non-dup-suffixed) video file for `stem`, per
+    list_videos()'s de-duplication -- or None if no video has this stem.
+    Needed to resolve `<video_stem>_calib.json`/`_wickets_calib.json`
+    against the same real (symlink-resolved) path pipeline/calibration.py
+    itself resolves against."""
+    for v in list_videos():
+        if v["stem"] == stem:
+            return VIDEOS_DIR / v["filename"]
+    return None
+
+
 # --- routes ------------------------------------------------------------------
 
 
@@ -147,6 +168,53 @@ def api_detections(stem):
     except (OSError, json.JSONDecodeError) as exc:
         return jsonify({"error": "bad_detections_file", "stem": safe_stem, "message": str(exc)}), 500
     return jsonify(data)
+
+
+@app.route("/api/calibration/<stem>")
+def api_calibration(stem):
+    """Whichever calibration file (see pipeline/calibration.py) applies to
+    this video's real path, in a shape the viewer can render an overlay
+    from -- `{"type": "none"}` if neither exists, `{"type": "calib", ...}`
+    for the full near/far-stump-height pinhole calibration (no explicit
+    on-frame points stored, so the viewer can only badge it, not draw it),
+    or `{"type": "wickets_calib", ...}` for the weaker single-plane
+    pixels-per-meter fallback (has explicit `points`, so the viewer draws
+    them directly on the overlay canvas)."""
+    safe_stem = _safe_stem(stem)
+    video_path = _canonical_video_path(safe_stem)
+    if video_path is None:
+        return jsonify({"type": "none"})
+
+    calib = load_calibration(str(video_path))
+    if calib:
+        f_px = focal_length_px(calib, _CONFIG)
+        return jsonify(
+            {
+                "type": "calib",
+                "f_px": f_px,
+                "near_stump_height_px": calib.get("near_stump_height_px"),
+                "far_stump_height_px": calib.get("far_stump_height_px"),
+                "measured_near_distance_m": calib.get("measured_near_distance_m"),
+                "frame_size": calib.get("frame_size"),
+                "note": calib.get("note"),
+            }
+        )
+
+    wickets = load_wickets_calibration(str(video_path))
+    if wickets:
+        return jsonify(
+            {
+                "type": "wickets_calib",
+                "points": wickets.get("points"),
+                "pixel_distance": wickets.get("pixel_distance"),
+                "pixels_per_meter": pixels_per_meter_from_wickets(wickets),
+                "wicket_distance_m": wickets.get("wicket_distance_m"),
+                "frame_size": wickets.get("frame_size"),
+                "note": wickets.get("note"),
+            }
+        )
+
+    return jsonify({"type": "none"})
 
 
 @app.route("/api/candidates/<stem>/<mode>")

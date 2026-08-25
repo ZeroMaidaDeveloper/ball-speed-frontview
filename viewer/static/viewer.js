@@ -15,6 +15,7 @@
   const sourceSelect = document.getElementById("source-select");
   const labChannelSelect = document.getElementById("lab-channel-select");
   const videoMetaEl = document.getElementById("video-meta");
+  const calibBadgeEl = document.getElementById("calib-badge");
   const stage = document.getElementById("stage");
   const video = document.getElementById("video");
   const overlay = document.getElementById("overlay");
@@ -57,6 +58,7 @@
   let detections = null; // parsed detections.json, or null if unavailable (pipeline mode)
   let flatFrames = []; // all frames across deliveries, sorted by t, tagged with deliveryId (pipeline mode)
   let rawCandidates = null; // parsed candidates_<mode>.json, or null (raw modes)
+  let calibration = null; // /api/calibration/<stem> response, see pipeline/calibration.py
   let activeDeliveryId = null;
   let rafHandle = null;
   let labChannel = "none"; // "none" | "l" | "a" | "b" | "mask"
@@ -176,6 +178,45 @@
     ctx.restore();
   }
 
+  // Draws the wicket-calibration reference points/line (see
+  // pipeline/calibration.py: `_wickets_calib.json`) directly on the
+  // overlay canvas -- these are fixed, on-frame pixel coordinates from a
+  // single reference frame, not tied to the current playback time, so
+  // this is drawn every frame regardless of mode. The full pinhole
+  // calibration (`_calib.json`) has no explicit on-frame points of its
+  // own (just stump-height measurements), so there's nothing to draw for
+  // it here -- only the header badge (see updateCalibBadge) covers that
+  // case.
+  function drawCalibrationOverlay(scaleX, scaleY) {
+    if (!calibration || calibration.type !== "wickets_calib") return;
+    const points = calibration.points;
+    if (!Array.isArray(points) || points.length !== 2) return;
+
+    const [px1, py1] = [points[0][0] * scaleX, points[0][1] * scaleY];
+    const [px2, py2] = [points[1][0] * scaleX, points[1][1] * scaleY];
+
+    ctx.save();
+    ctx.strokeStyle = "#00e5ff";
+    ctx.fillStyle = "#00e5ff";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(px1, py1);
+    ctx.lineTo(px2, py2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    for (const [px, py] of [[px1, py1], [px2, py2]]) {
+      ctx.beginPath();
+      ctx.arc(px, py, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.font = "11px -apple-system, sans-serif";
+    const dist = typeof calibration.pixel_distance === "number" ? calibration.pixel_distance.toFixed(0) : "?";
+    const label = `wicket calib: ${calibration.wicket_distance_m}m = ${dist}px`;
+    ctx.fillText(label, Math.min(px1, px2) + 8, Math.min(py1, py2) - 6);
+    ctx.restore();
+  }
+
   function draw() {
     ctx.clearRect(0, 0, overlay.width, overlay.height);
 
@@ -188,6 +229,8 @@
 
     const scaleX = overlay.width / srcW;
     const scaleY = overlay.height / srcH;
+
+    drawCalibrationOverlay(scaleX, scaleY);
 
     const t = video.currentTime;
     const tol = (1 / fps()) * MATCH_TOLERANCE_FACTOR;
@@ -527,6 +570,33 @@
     }
   }
 
+  async function loadCalibrationFor(stem) {
+    try {
+      const res = await fetch(`/api/calibration/${encodeURIComponent(stem)}`);
+      if (!res.ok) return { type: "none" };
+      return await res.json();
+    } catch (err) {
+      console.error("Failed to load calibration:", err);
+      return { type: "none" };
+    }
+  }
+
+  function updateCalibBadge() {
+    calibBadgeEl.classList.remove("calib-full", "calib-planar", "calib-none");
+    if (!calibration || calibration.type === "none") {
+      calibBadgeEl.textContent = "no calibration -- using flight_distance_m fallback";
+      calibBadgeEl.classList.add("calib-none");
+    } else if (calibration.type === "calib") {
+      const f = typeof calibration.f_px === "number" ? calibration.f_px.toFixed(0) : "?";
+      calibBadgeEl.textContent = `calibrated (pinhole, f_px=${f})`;
+      calibBadgeEl.classList.add("calib-full");
+    } else if (calibration.type === "wickets_calib") {
+      const ppm = typeof calibration.pixels_per_meter === "number" ? calibration.pixels_per_meter.toFixed(1) : "?";
+      calibBadgeEl.textContent = `wicket calib (planar, ${ppm} px/m)`;
+      calibBadgeEl.classList.add("calib-planar");
+    }
+  }
+
   async function loadCandidatesFor(stem, mode) {
     try {
       const res = await fetch(`/api/candidates/${encodeURIComponent(stem)}/${encodeURIComponent(mode)}`);
@@ -610,6 +680,9 @@
     video.pause();
     video.src = meta.url;
     video.load();
+
+    calibration = await loadCalibrationFor(meta.stem);
+    updateCalibBadge();
 
     await loadSourceData();
   }

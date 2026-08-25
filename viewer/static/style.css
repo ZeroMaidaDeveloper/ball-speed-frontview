@@ -64,6 +64,30 @@ header h1 {
   font-size: 13px;
 }
 
+.calib-badge {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.calib-badge.calib-full {
+  color: var(--high);
+  border-color: rgba(77, 220, 140, 0.4);
+}
+
+.calib-badge.calib-planar {
+  color: #00e5ff;
+  border-color: rgba(0, 229, 255, 0.4);
+}
+
+.calib-badge.calib-none {
+  color: var(--low);
+  border-color: rgba(255, 107, 107, 0.4);
+}
+
 main {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;

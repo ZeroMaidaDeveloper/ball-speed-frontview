@@ -142,6 +142,26 @@ def _inside_any_mask(cx: int, cy: int, masks: list[np.ndarray]) -> bool:
     return any(mask[cy, cx] > 0 for mask in masks)
 
 
+def _non_person_mask(shape: tuple[int, int], masks: list[np.ndarray]) -> np.ndarray:
+    """Boolean array, True where NOT covered by any of `masks`. Used to
+    keep a person's own (expected, continuous) motion from ever counting
+    toward the recurring-motion "activity" map -- see its use in
+    LabScaleFrameDetector.process_frame for why this matters: without it,
+    a batsman/bowler who's naturally been shifting/fidgeting in one screen
+    region for a while can push that region's activity above
+    activity_max, which then also suppresses the real ball the instant it
+    flies through or near that same region (observed on teevra.mov: the
+    ball crosses right next to the batsman and was silently dropped this
+    way, even though it separately passes the person-mask exclusion below
+    since it isn't itself inside his mask)."""
+    if not masks:
+        return np.ones(shape, dtype=bool)
+    combined = np.zeros(shape, dtype=bool)
+    for mask in masks:
+        combined |= mask > 0
+    return ~combined
+
+
 class LabScaleFrameDetector:
     """Stateful per-frame LAB-scale detector -- the same MOG2/CLAHE/color-
     gate/ROI/person-mask pipeline as detect_candidates() below, factored
@@ -188,16 +208,22 @@ class LabScaleFrameDetector:
         fg = self.mog2.apply(enhanced_l)
         if self.activity is None:
             self.activity = np.zeros(fg.shape, dtype=np.float32)
+
+        # Computed before the warmup return (not just after it, like
+        # everything else below) so a person's own motion is excluded from
+        # the activity map from the very first frame -- see
+        # _non_person_mask's docstring.
+        if self.person_model is not None and self.frame_idx % cfg_lab["person_mask_interval"] == 0:
+            self.person_masks = _person_masks(self.person_model, frame, cfg_lab)
+        non_person = _non_person_mask(fg.shape, self.person_masks)
+
         if self.frame_idx < cfg_det["warmup_frames"]:
-            self.activity = self.activity * cfg_det["activity_decay"] + (fg > 0).astype(np.float32)
+            self.activity = self.activity * cfg_det["activity_decay"] + ((fg > 0) & non_person).astype(np.float32)
             return []
 
         fg = _clean_motion_mask(fg)
         if self.roi_mask is not None:
             fg = cv2.bitwise_and(fg, self.roi_mask)
-
-        if self.person_model is not None and self.frame_idx % cfg_lab["person_mask_interval"] == 0:
-            self.person_masks = _person_masks(self.person_model, frame, cfg_lab)
 
         contours, _ = cv2.findContours(fg, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -247,7 +273,7 @@ class LabScaleFrameDetector:
 
         # Update activity AFTER using it this frame, so a blob is judged
         # against its history up to (not including) the frame it's in.
-        self.activity = self.activity * cfg_det["activity_decay"] + (fg > 0).astype(np.float32)
+        self.activity = self.activity * cfg_det["activity_decay"] + ((fg > 0) & non_person).astype(np.float32)
         return out
 
 

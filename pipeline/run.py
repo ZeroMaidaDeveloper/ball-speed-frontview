@@ -14,7 +14,7 @@ from typing import Any
 import cv2
 import yaml
 
-from calibration import focal_length_px, load_calibration
+from calibration import focal_length_px, load_calibration, load_wickets_calibration, pixels_per_meter_from_wickets
 from speed import compute_delivery_speed
 from track import segment_deliveries
 from zoom_track_detect import detect_candidates as zoom_track_detect_candidates
@@ -75,10 +75,22 @@ def run(video_path: str, config: dict[str, Any], cache_dir: Path | None = None) 
 
     calib = load_calibration(video_path)
     f_px = focal_length_px(calib, config) if calib else None
-    print(
-        f"[run] calibration: {'f_px=' + format(f_px, '.0f') if f_px else 'none (using flight_distance_m fallback)'}",
-        flush=True,
-    )
+
+    # Weaker single-plane fallback (see pipeline/calibration.py and
+    # pipeline/speed.py: _planar_pixel_speed) -- only checked when there's
+    # no full stump-height calibration to derive a real focal length from.
+    pixels_per_meter = None
+    if f_px is None:
+        wickets_calib = load_wickets_calibration(video_path)
+        pixels_per_meter = pixels_per_meter_from_wickets(wickets_calib) if wickets_calib else None
+
+    if f_px is not None:
+        calib_desc = f"f_px={f_px:.0f}"
+    elif pixels_per_meter is not None:
+        calib_desc = f"pixels_per_meter={pixels_per_meter:.1f} (planar wickets fallback)"
+    else:
+        calib_desc = "none (using flight_distance_m fallback)"
+    print(f"[run] calibration: {calib_desc}", flush=True)
 
     print(f"[run] segmenting deliveries from {len(candidates)} total candidates ...", flush=True)
     deliveries = segment_deliveries(candidates, config)
@@ -86,7 +98,7 @@ def run(video_path: str, config: dict[str, Any], cache_dir: Path | None = None) 
 
     out_deliveries = []
     for i, delivery in enumerate(deliveries):
-        d = compute_delivery_speed(delivery, config, f_px)
+        d = compute_delivery_speed(delivery, config, f_px, pixels_per_meter)
         d["id"] = i
         out_deliveries.append(d)
 

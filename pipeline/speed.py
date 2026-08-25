@@ -9,6 +9,17 @@ recession prefix (see `_trim_and_fit_distance`). This works correctly for
 a PARTIAL track (doesn't need to assume the tracked segment spans the
 whole release-to-arrival flight), unlike the fallback below.
 
+SECOND, weaker option, when no `_calib.json` exists but a
+`<video_stem>_wickets_calib.json` does (see pipeline/calibration.py:
+pixels_per_meter_from_wickets): the tracked ball's total pixel path
+length converted straight to metres via a single fixed pixels-per-meter
+scale, divided by the elapsed time (`_planar_pixel_speed`). Unlike the
+primary estimate this has no depth/perspective model at all -- it's only
+strictly accurate for motion at the calibration plane's own distance from
+the camera -- so it's used only as a fallback when the video has no
+stump-height-pair calibration to derive a real focal length from (e.g.
+no far-end wicket is set up in frame at all).
+
 FALLBACK, when no calibration file exists for the video: time-of-flight
 over the assumed crease-to-crease distance
 (`config["geometry"]["flight_distance_m"]`), using the delivery's real
@@ -166,6 +177,28 @@ def _trim_and_fit_distance(
     return {"speed_kmh": abs(float(slope)) * 3.6, "r2": r2, "n_used": len(ts_used), "n_total": n}
 
 
+def _planar_pixel_speed(real: list[dict[str, Any]], pixels_per_meter: float) -> dict[str, Any] | None:
+    """Average speed over the track's real frames, converting total pixel
+    path length directly to metres via a fixed single-plane
+    pixels_per_meter scale (see pipeline/calibration.py: `_wickets_calib.
+    json` / pixels_per_meter_from_wickets) instead of a depth-aware pinhole
+    fit. Sums consecutive-frame (cx, cy) Euclidean displacement rather than
+    endpoint-to-endpoint distance, since the ball's path isn't a straight
+    line in image space (parabolic flight arc) -- endpoint distance would
+    undercount it. Returns None if there aren't at least 2 real frames or
+    the elapsed time is non-positive."""
+    if len(real) < 2:
+        return None
+    path_px = sum(
+        ((b["cx"] - a["cx"]) ** 2 + (b["cy"] - a["cy"]) ** 2) ** 0.5 for a, b in zip(real, real[1:])
+    )
+    duration_s = real[-1]["t"] - real[0]["t"]
+    if duration_s <= 0:
+        return None
+    speed_mps = (path_px / pixels_per_meter) / duration_s
+    return {"speed_kmh": speed_mps * 3.6, "n_used": len(real)}
+
+
 def _quality_flags(
     delivery: dict[str, Any],
     config: dict[str, Any],
@@ -227,6 +260,13 @@ def _quality_flags(
         # flight distance by the tracked duration, which is only accurate
         # if the track happens to span the whole flight.
         flags.append("uncalibrated_speed_estimate")
+    elif speed_method == "planar_pixel_speed":
+        # No <video_stem>_calib.json (no depth model), only a weaker
+        # single-plane pixels-per-meter scale -- see pipeline/calibration.py
+        # and speed.py: _planar_pixel_speed.
+        flags.append("planar_calibration_estimate")
+        if real < config["calibration"]["min_frames_for_fit"]:
+            flags.append("few_calibrated_frames")
     elif fit is not None:
         cfg_calib = config["calibration"]
         if fit["n_used"] < cfg_calib["min_frames_for_fit"]:
@@ -327,7 +367,10 @@ def _size_speed_curve(
 
 
 def compute_delivery_speed(
-    delivery: dict[str, Any], config: dict[str, Any], f_px: float | None = None
+    delivery: dict[str, Any],
+    config: dict[str, Any],
+    f_px: float | None = None,
+    pixels_per_meter: float | None = None,
 ) -> dict[str, Any]:
     """Augment a delivery dict (from `track.segment_deliveries`) with speed
     fields, per SCHEMA.md `deliveries[]`: `speed_kmh`, `speed_confidence`,
@@ -335,8 +378,10 @@ def compute_delivery_speed(
 
     `f_px` is the video's calibrated focal length in pixels (see
     pipeline/calibration.py: focal_length_px), or None if no
-    `<video_stem>_calib.json` exists for this video -- the caller loads
-    and computes it once per video, not per delivery.
+    `<video_stem>_calib.json` exists for this video. `pixels_per_meter` is
+    the weaker single-plane fallback (see pipeline/calibration.py:
+    pixels_per_meter_from_wickets), used only when `f_px` is None. The
+    caller loads and computes both once per video, not per delivery.
 
     Returns a new dict (does not mutate the input's top level, though the
     `frames` list is shared by reference for efficiency).
@@ -353,6 +398,10 @@ def compute_delivery_speed(
         zs = [f_px * ball_diam_m / f["diam_px"] for f in real]
         fit = _trim_and_fit_distance(ts, zs, config["calibration"])
 
+    planar = None
+    if fit is None and f_px is None and pixels_per_meter is not None:
+        planar = _planar_pixel_speed(real, pixels_per_meter)
+
     if fit is not None:
         speed_kmh = fit["speed_kmh"]
         speed_method = "calibrated_size"
@@ -362,6 +411,10 @@ def compute_delivery_speed(
         # flagged low_diam_change purely because of its own already-
         # excluded corrupted tail.
         diam_ratio = _diam_growth_ratio(real[: fit["n_used"]])
+    elif planar is not None:
+        speed_kmh = planar["speed_kmh"]
+        speed_method = "planar_pixel_speed"
+        diam_ratio = _diam_growth_ratio(real)
     else:
         # Fallback: no calibration file for this video, or too few real
         # frames to fit -- see module docstring for why this is known to

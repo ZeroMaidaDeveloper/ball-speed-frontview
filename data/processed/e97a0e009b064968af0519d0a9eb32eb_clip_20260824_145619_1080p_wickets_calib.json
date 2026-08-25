@@ -1,0 +1,11 @@
+{
+  "points": [
+    [900, 678],
+    [900, 1076]
+  ],
+  "pixel_distance": 398.0,
+  "pixels_per_meter": 559.7749647679324,
+  "wicket_distance_m": 0.711,
+  "frame_size": [1920, 1080],
+  "note": "Same nets facility as delivery_4/7/19/21/teevra.mov but this recording session (clip_144626/144954/145619, fixed tripod) only has ONE set of stumps set up, at the near/bowling end -- no far-end wicket exists anywhere in frame (confirmed by inspecting all three same-session clips). So this uses the near stump's own known height (0.711m, config.yaml: calibration.stump_height_m) as the reference distance, same fallback as speed4_wickets_calib.json's single-wicket case, rather than the near+far stump-height pinhole method pipeline/calibration.py normally uses. Measured from frame 0 (left/branded stump, x~900): top edge y=678, base y=1076 (the video has a baked-in 3px black letterbox strip at rows 1077-1079, so the true ground contact point is at or within ~3px of 1076, not visibly cut off). points/pixel_distance/pixels_per_meter match the source project's ball_speed.py two-point wicket-calibration tool's own output format (see Auto labelling usin LAB Scale/Auto_Model_Training/ball_speed.py) -- NOT the pipeline/calibration.py near_stump_height_px/far_stump_height_px schema, and NOT currently read by pipeline/speed.py (which needs a measured_near_distance_m or a far stump to derive a focal length for its distance-from-camera model). This single-plane pixels_per_meter value is only strictly valid at the near stump's own distance from camera -- it will over/underestimate real-world scale for anything (like the ball) that's actually further down the pitch, since it doesn't account for perspective the way the pinhole model does."
+}

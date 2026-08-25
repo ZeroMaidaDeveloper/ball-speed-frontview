@@ -317,7 +317,10 @@ def detect_candidates(video_path: str, config: dict[str, Any]) -> list[dict[str,
             # YOLO -- kept as the final fallback since (see module
             # docstring) it empirically underperforms both LAB and the
             # motion-diff rescue on this footage's small, motion-blurred
-            # ball.
+            # ball. Same person-mask exclusion and direction check as
+            # motion_rescue, for the same reason (see _motion_rescue's
+            # docstring) -- this tier is rarer but not exempt from the
+            # same failure mode.
             if confirmed is None:
                 x0 = max(0, int(pred_cx) - half)
                 y0 = max(0, int(pred_cy) - half)
@@ -334,7 +337,10 @@ def detect_candidates(video_path: str, config: dict[str, Any]) -> list[dict[str,
                         best_box = max(boxes, key=lambda b: float(b.conf[0]))
                         bx1, by1, bx2, by2 = best_box.xyxy[0].tolist()
                         yolo_cx, yolo_cy = (bx1 + bx2) / 2.0, (by1 + by2) / 2.0
-                        if _direction_ok(yolo_cx, yolo_cy, track_pos, track_dir, cfg_zoom):
+                        yolo_in_person = lab_detector.person_masks and _inside_any_mask(
+                            int(yolo_cx), int(yolo_cy), lab_detector.person_masks
+                        )
+                        if not yolo_in_person and _direction_ok(yolo_cx, yolo_cy, track_pos, track_dir, cfg_zoom):
                             confirmed = {
                                 "bbox": [
                                     x0 + bx1 / upscale,

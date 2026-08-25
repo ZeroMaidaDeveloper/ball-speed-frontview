@@ -113,12 +113,19 @@ detection:
   # Recurring-motion suppression: netting/leaves flap in roughly the same
   # spot for many consecutive frames, unlike the ball which sweeps through
   # a new position every frame. Each pixel accumulates
-  # `activity = activity*activity_decay + is_foreground` per frame; a blob
-  # is dropped as noise if its mean activity exceeds activity_max (i.e. that
-  # spot has been flickering foreground repeatedly, not just this once).
-  # Empirically tuned against Takneek/1000313863.mp4 (see pipeline/
-  # classical_detect.py): without this, MOG2 alone throws ~24 candidate
-  # blobs/frame of net/leaf texture and the tracker locks onto noise.
+  # `activity = activity*activity_decay + is_foreground` per frame (in
+  # lab_scale_detect.py, EXCLUDING pixels covered by a detected person --
+  # see that module's _non_person_mask: without this, a player who's
+  # simply been standing/fidgeting in one screen region pushes that
+  # region's activity above activity_max on its own, which then also
+  # suppresses the real ball the instant it flies through or near that
+  # same region -- observed on teevra.mov, where the ball passes right
+  # next to a batsman); a blob is dropped as noise if its mean activity
+  # exceeds activity_max (i.e. that spot has been flickering foreground
+  # repeatedly, not just this once). Empirically tuned against Takneek/
+  # 1000313863.mp4 (see pipeline/classical_detect.py): without this, MOG2
+  # alone throws ~24 candidate blobs/frame of net/leaf texture and the
+  # tracker locks onto noise.
   activity_decay: 0.98
   activity_max: 0.5
   # YOLO hybrid fusion. models/ball_yolo26s.pt is currently just the stock
