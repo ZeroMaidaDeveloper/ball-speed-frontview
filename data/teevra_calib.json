@@ -6,5 +6,25 @@
     1920,
     1080
   ],
-  "note": "Same nets facility/camera placement as delivery_4/7/19/21 but a different recording session (75fps vs 50/60fps) -- measured independently rather than reusing their exact pixel values. near_stump_height_px is approximate: the stump-to-base collar transition is partly obscured by teevra.mov's baked-in video-player seek bar (see teevra_roi.json), so this carries more uncertainty than the other 4 videos' calibration."
+  "note": "Same nets facility/camera placement as delivery_4/7/19/21 but a different recording session (75fps vs 50/60fps) -- measured independently rather than reusing their exact pixel values. near_stump_height_px is approximate: the stump-to-base collar transition is partly obscured by teevra.mov's baked-in video-player seek bar (see teevra_roi.json), so this carries more uncertainty than the other 4 videos' calibration. On-frame reference points for the viewer overlay (near_points/far_points, each [top,bottom]) were added after the fact for visualization only -- top points were located by direct pixel inspection of measured_frame; bottom points are top_y + the already-recorded near/far_stump_height_px above (not independently re-measured), so the drawn segment length always matches the numeric calibration value even where the true base is partly occluded (e.g. by the far-end batsman standing at his own stumps).",
+  "near_points": [
+    [
+      900,
+      617
+    ],
+    [
+      900,
+      968.0
+    ]
+  ],
+  "far_points": [
+    [
+      935,
+      405
+    ],
+    [
+      935,
+      450.0
+    ]
+  ]
 }

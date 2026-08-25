@@ -175,11 +175,12 @@ def api_calibration(stem):
     """Whichever calibration file (see pipeline/calibration.py) applies to
     this video's real path, in a shape the viewer can render an overlay
     from -- `{"type": "none"}` if neither exists, `{"type": "calib", ...}`
-    for the full near/far-stump-height pinhole calibration (no explicit
-    on-frame points stored, so the viewer can only badge it, not draw it),
-    or `{"type": "wickets_calib", ...}` for the weaker single-plane
-    pixels-per-meter fallback (has explicit `points`, so the viewer draws
-    them directly on the overlay canvas)."""
+    for the full near/far-stump-height pinhole calibration (draws
+    `near_points`/`far_points` when present -- on-frame [top, bottom]
+    pixel coordinates added to these calib files after the fact purely for
+    this overlay, not used in the focal-length math itself, see each
+    file's note), or `{"type": "wickets_calib", ...}` for the weaker
+    single-plane pixels-per-meter fallback (has explicit `points`)."""
     safe_stem = _safe_stem(stem)
     video_path = _canonical_video_path(safe_stem)
     if video_path is None:
@@ -195,6 +196,8 @@ def api_calibration(stem):
                 "near_stump_height_px": calib.get("near_stump_height_px"),
                 "far_stump_height_px": calib.get("far_stump_height_px"),
                 "measured_near_distance_m": calib.get("measured_near_distance_m"),
+                "near_points": calib.get("near_points"),
+                "far_points": calib.get("far_points"),
                 "frame_size": calib.get("frame_size"),
                 "note": calib.get("note"),
             }

@@ -1,0 +1,11 @@
+{
+  "points": [
+    [900, 678],
+    [900, 1076]
+  ],
+  "pixel_distance": 398.0,
+  "pixels_per_meter": 559.7749647679324,
+  "wicket_distance_m": 0.711,
+  "frame_size": [1920, 1080],
+  "note": "Same fixed-tripod nets session as clip_144954/145619.mp4 (confirmed: near stump pixel position is identical across all three clips' frame 0 -- top edge y=678, base y=1076/1077 where each clip's own baked-in black letterbox strip starts) -- see clip_20260824_145619_1080p_wickets_calib.json for the full measurement rationale, reused verbatim here rather than re-deriving since it's the same camera/stumps. No far-end wicket exists in this session (see that file's note), so this is the near-stump-height-only planar fallback, not the near+far pinhole method."
+}

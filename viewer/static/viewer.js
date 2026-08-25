@@ -178,26 +178,17 @@
     ctx.restore();
   }
 
-  // Draws the wicket-calibration reference points/line (see
-  // pipeline/calibration.py: `_wickets_calib.json`) directly on the
-  // overlay canvas -- these are fixed, on-frame pixel coordinates from a
-  // single reference frame, not tied to the current playback time, so
-  // this is drawn every frame regardless of mode. The full pinhole
-  // calibration (`_calib.json`) has no explicit on-frame points of its
-  // own (just stump-height measurements), so there's nothing to draw for
-  // it here -- only the header badge (see updateCalibBadge) covers that
-  // case.
-  function drawCalibrationOverlay(scaleX, scaleY) {
-    if (!calibration || calibration.type !== "wickets_calib") return;
-    const points = calibration.points;
+  // Draws one [top, bottom] point pair as a dashed segment + end markers
+  // + label, in canvas pixel space. Shared by both calibration overlay
+  // shapes below.
+  function drawCalibSegment(points, scaleX, scaleY, color, label) {
     if (!Array.isArray(points) || points.length !== 2) return;
-
     const [px1, py1] = [points[0][0] * scaleX, points[0][1] * scaleY];
     const [px2, py2] = [points[1][0] * scaleX, points[1][1] * scaleY];
 
     ctx.save();
-    ctx.strokeStyle = "#00e5ff";
-    ctx.fillStyle = "#00e5ff";
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
     ctx.lineWidth = 2;
     ctx.setLineDash([6, 4]);
     ctx.beginPath();
@@ -210,11 +201,33 @@
       ctx.arc(px, py, 4, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.font = "11px -apple-system, sans-serif";
-    const dist = typeof calibration.pixel_distance === "number" ? calibration.pixel_distance.toFixed(0) : "?";
-    const label = `wicket calib: ${calibration.wicket_distance_m}m = ${dist}px`;
-    ctx.fillText(label, Math.min(px1, px2) + 8, Math.min(py1, py2) - 6);
+    if (label) {
+      ctx.font = "11px -apple-system, sans-serif";
+      ctx.fillText(label, Math.min(px1, px2) + 8, Math.min(py1, py2) - 6);
+    }
     ctx.restore();
+  }
+
+  // Draws the calibration reference points/lines (see
+  // pipeline/calibration.py) directly on the overlay canvas -- these are
+  // fixed, on-frame pixel coordinates from a single reference frame, not
+  // tied to the current playback time, so this is drawn every frame
+  // regardless of mode. `wickets_calib` always has explicit `points`; the
+  // full pinhole `calib` type draws `near_points`/`far_points` when
+  // present (added after the fact purely for this overlay -- see each
+  // calib file's note) and falls back to badge-only (see
+  // updateCalibBadge) when they're absent.
+  function drawCalibrationOverlay(scaleX, scaleY) {
+    if (!calibration) return;
+    if (calibration.type === "wickets_calib") {
+      const dist = typeof calibration.pixel_distance === "number" ? calibration.pixel_distance.toFixed(0) : "?";
+      drawCalibSegment(calibration.points, scaleX, scaleY, "#00e5ff", `wicket calib: ${calibration.wicket_distance_m}m = ${dist}px`);
+    } else if (calibration.type === "calib") {
+      const nh = typeof calibration.near_stump_height_px === "number" ? calibration.near_stump_height_px.toFixed(0) : "?";
+      const fh = typeof calibration.far_stump_height_px === "number" ? calibration.far_stump_height_px.toFixed(0) : "?";
+      drawCalibSegment(calibration.near_points, scaleX, scaleY, "#4ddc8c", `near stump: ${nh}px`);
+      drawCalibSegment(calibration.far_points, scaleX, scaleY, "#4ddc8c", `far stump: ${fh}px`);
+    }
   }
 
   function draw() {

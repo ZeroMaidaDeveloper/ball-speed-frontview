@@ -6,5 +6,25 @@
     1920,
     1080
   ],
-  "note": "Near/far stump pixel heights (bare stumps only, excluding the plastic practice-base flare), measured from a representative early frame via yellow-color segmentation + width-profile analysis (see pipeline/calibration.py). far_stump_height_px is derived by applying the near set's measured stump-only/total-height ratio to the far set's total height, since the far set is too small/low-res to reliably separate stump from base directly. Used with config.yaml: calibration.stump_height_m/pitch_length_m to derive a per-video focal length (pinhole model) for speed.py's calibrated speed estimate."
+  "note": "Near/far stump pixel heights (bare stumps only, excluding the plastic practice-base flare), measured from a representative early frame via yellow-color segmentation + width-profile analysis (see pipeline/calibration.py). far_stump_height_px is derived by applying the near set's measured stump-only/total-height ratio to the far set's total height, since the far set is too small/low-res to reliably separate stump from base directly. Used with config.yaml: calibration.stump_height_m/pitch_length_m to derive a per-video focal length (pinhole model) for speed.py's calibrated speed estimate. On-frame reference points for the viewer overlay (near_points/far_points, each [top,bottom]) were added after the fact for visualization only -- top points were located by direct pixel inspection of measured_frame; bottom points are top_y + the already-recorded near/far_stump_height_px above (not independently re-measured), so the drawn segment length always matches the numeric calibration value even where the true base is partly occluded (e.g. by the far-end batsman standing at his own stumps).",
+  "near_points": [
+    [
+      940,
+      610
+    ],
+    [
+      940,
+      982.0
+    ]
+  ],
+  "far_points": [
+    [
+      930,
+      405
+    ],
+    [
+      930,
+      449.6
+    ]
+  ]
 }
